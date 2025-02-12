@@ -1,4 +1,4 @@
-# 💀 HollowReaper – Hollow the Living, Control the Void
+# 💀 HollowReaper - Hollow the Living, Control the Void
 HollowReaper is a mystical tool crafted to manipulate processes through Process Hollowing, allowing seamless injection of custom shellcode into a legitimate process. This arcane art lets you erase a process’s soul and replace it with your own will.
 
 ## 📜 The Components 
