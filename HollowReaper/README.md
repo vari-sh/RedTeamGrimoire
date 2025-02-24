@@ -2,7 +2,7 @@
 HollowReaper is a mystical tool crafted to manipulate processes through Process Hollowing, allowing seamless injection of custom shellcode into a legitimate process. This arcane art lets you erase a process’s soul and replace it with your own will.
 
 ## 📜 The Components 
-💀 HollowReaper.c - The core of this dark ritual, this program performs process hollowing, carving out a legitimate process and injecting your custom payload.
+💀 HollowReaper.c - The core of this dark ritual, this program performs process hollowing, carving out a legitimate process and injecting your custom payload. Moreover, it uses BYOVD arcane technique to disable PPL protection from LSASS process.
 
 💎 LSASS_CDumper.c - A sacrificial script, an example C code that extracts LSASS memory. This must be compiled, and its shellcode must be extracted using Donut.
 
