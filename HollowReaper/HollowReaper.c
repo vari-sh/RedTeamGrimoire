@@ -241,11 +241,6 @@ Offsets getOffsets() {
 // API Deobfuscation Functions (XOR)
 // =====================================================
 
-// --- XOR deobfuscation functions ---
-//
-// The key used (20 characters):
-static const char XOR_KEY[] = "0123456789abcdefghij"; // length 20
-
 // Function to decrypt a string (encrypted data is not null-terminated)
 char* xor_decrypt_string(const unsigned char* cipher, size_t len, const char* key, size_t key_len)
 {
