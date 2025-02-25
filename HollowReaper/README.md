@@ -8,6 +8,8 @@ HollowReaper is a mystical tool crafted to manipulate processes through Process 
 
 🗝️ xor20charkey.py - A cryptic enchantment, a Python script to obfuscate shellcode via XOR, ensuring your payload remains unseen in the void.
 
+⚙️ RTCore64.sys - An ancient cursed artifact, a vulnerable driver that grants the forbidden power to write directly into kernel memory. Through this relic of flawed craftsmanship, the barriers between userland and kernel are shattered, allowing the wielder to manipulate the very fabric of the operating system. 
+
 ## 🕯️ The Ritual
 1️⃣ Compile LSASS_CDumper.c into an executable.
 
