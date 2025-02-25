@@ -573,17 +573,17 @@ void static disablePPL() {
 // =====================================================
 HMODULE LoadCleanDLL(char* dllPath) {
 
-    HMODULE hDbghelp = LoadLibraryA(dllPath);
-    if (hDbghelp)
+    HMODULE hDLL = LoadLibraryA(dllPath);
+    if (hDLL)
     {
-        printf("[+] Loaded clean copy of dbghelp.dll at: %p\n", hDbghelp);
+        printf("[+] Loaded clean copy of %s at: %p\n", dllPath, hDLL);
     }
     else
     {
-        printf("[!] Failed to load dbghelp.dll. Error: %lu\n", GetLastError());
+        printf("[!] Failed to load %s. Error: %lu\n", dllPath, GetLastError());
     }
 
-    return hDbghelp;
+    return hDLL;
 }
 
 // =====================================================
