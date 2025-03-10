@@ -949,7 +949,7 @@ int main(void)
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
-    // Duplicazione del token di SYSTEM
+    // Duplicate SYSTEM token
     HANDLE hSystemToken = NULL;
     if (!GetSystemTokenAndDuplicate(&hSystemToken)) {
         fprintf(logfile, "[!] Failed to duplicate SYSTEM token.\n");
@@ -959,7 +959,7 @@ int main(void)
 
     EnableAllPrivileges(hSystemToken);
 
-    // Impersona il token SYSTEM
+    // Impersonate SYSTEM token
     if (!ImpersonateLoggedOnUser(hSystemToken)) {
         fprintf(logfile, "[!] ImpersonateLoggedOnUser failed, error: %lu\n", GetLastError());
     }
