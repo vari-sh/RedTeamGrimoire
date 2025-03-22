@@ -9,12 +9,15 @@ The vessel for your payload. This performs process hollowing, carving out a legi
 ### 🩸 Doppelganger.c
 The soul thief. This shellcode:
 
-🔓 Disables PPL using the cursed RTCore64.sys driver (BYOVD)
-🧬 Clones LSASS into a benign replica
-💾 Creates a Minidump from the clone
-🧊 XOR-encrypts the dump and writes it to disk, leaving behind only a shadow
+🛡️ Disables PPL using the cursed RTCore64.sys driver (BYOVD)
 
-### 🗝️ decrypt_xor_dump.py
+🧬 Clones LSASS into a benign replica
+
+💾 Creates a Minidump from the clone
+
+🗝️ XOR-encrypts the dump and writes it to disk, leaving behind only a shadow
+
+### 🔐 decrypt_xor_dump.py
 A local decryption utility. Use this to restore the original dump from its XOR-obfuscated form.
 
 ## 🧪 The Components
@@ -34,7 +37,7 @@ A local decryption utility. Use this to restore the original dump from its XOR-o
 
 💀 Run HollowReaper to hollow a process and trigger Doppelganger
 
-🧊 Use decrypt_xor_dump.py to decrypt the dumped file offline
+🗝️ Use decrypt_xor_dump.py to decrypt the dumped file offline
 
 ## ⚠️ Disclaimer:
 This tool is provided for educational and research purposes only. Use responsibly. The arcane always watches. 🧿
