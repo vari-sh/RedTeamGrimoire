@@ -27,9 +27,13 @@ A local decryption utility. Use this to restore the original dump from its XOR-o
 
 ## 🕯️ Usage Flow
 🔨 Compile Doppelganger.c
+
 🧪 Use Donut to convert it into shellcode
+
 🧿 Embed the shellcode into HollowReaper.c
+
 💀 Run HollowReaper to hollow a process and trigger Doppelganger
+
 🧊 Use decrypt_xor_dump.py to decrypt the dumped file offline
 
 ## ⚠️ Disclaimer:
