@@ -1,4 +1,4 @@
-# 🌀 Doppelganger – Mimic the Soul, Leave No Trace
+# 🪞 Doppelganger – Mimic the Soul, Leave No Trace
 Doppelganger is an arcane tool designed to mimic LSASS, extract its secrets, and hide them in plain sight. It builds upon the forbidden arts of HollowReaper, using hollowed processes, kernel exploits, and spectral clones to bypass protection and exfiltrate credentials with stealth.
 
 ## 📜 The Ritual
