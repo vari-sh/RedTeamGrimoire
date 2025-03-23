@@ -13,6 +13,8 @@ Step into the Red Team Grimoire, a tome of digital witchcraft where dark magic m
 
 🩸 SoulDumper - Rip the spirit from LSASS and claim its secrets.
 
+🪞 Doppelganger – Mirror the soul of LSASS, clone its essence, and conceal the stolen memory beneath layers of arcane obfuscation.
+
 ----------------------------------------------------------------------
 
 These spells are tools of the trade for the cunning and the daring. Wield them wisely, for power without caution invites ruin.
