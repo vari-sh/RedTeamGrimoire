@@ -5,6 +5,8 @@ Step into the Red Team Grimoire, a tome of digital witchcraft where dark magic m
 
 ## 🔮 Contents of the Grimoire 🔮
 
+🪞 Doppelganger – Mirror the soul of LSASS, clone its essence, and conceal the stolen memory beneath layers of arcane obfuscation.
+
 💀 HollowReaper - Pierce the soul of a process, hollow its core, and resurrect it with your own shellcode.
 
 🕯️ TGTConjuring - Summon the phantom of Kerberos to bypass authentication by injecting someone else's essence into your soul.
@@ -12,8 +14,6 @@ Step into the Red Team Grimoire, a tome of digital witchcraft where dark magic m
 🧟 NecroMirror - Reflect the shadow essence of the system and steal SAM, SECURITY, SOFTWARE and SYSTEM from the shadow world.
 
 🩸 SoulDumper - Rip the spirit from LSASS and claim its secrets.
-
-🪞 Doppelganger – Mirror the soul of LSASS, clone its essence, and conceal the stolen memory beneath layers of arcane obfuscation.
 
 ----------------------------------------------------------------------
 
