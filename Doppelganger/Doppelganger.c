@@ -207,30 +207,15 @@ Offsets getOffsets() {
     Offsets offs = { 0, 0, 0 };
 
     // Offsets table for x64 (TODO)
-    if (build <= 14393) {              // Windows 10 version 1607 (Build 14393)
+    if (build <= 16384) {       // Windows 8 Server 2012 NO PPL FIELD
         offs.ActiveProcessLinks = 0x0000;
         offs.ImageFileName = 0x0000;
         offs.Protection = 0x0000;
     }
-    else if (build <= 17134) {       // Windows 10 version 1803 (Build 17134)
-        offs.ActiveProcessLinks = 0x0000;
-        offs.ImageFileName = 0x0000;
-        offs.Protection = 0x0000;
-    }
-    else if (build <= 17763) {       // Windows 10 version 1809 (Build 17763)
-        offs.ActiveProcessLinks = 0x0000;
-        offs.ImageFileName = 0x0000;
-        offs.Protection = 0x0000;
-    }
-    else if (build <= 18362) {       // Windows 10 version 1903 (Build 18362)
-        offs.ActiveProcessLinks = 0x0000;
-        offs.ImageFileName = 0x0000;
-        offs.Protection = 0x0000;
-    }
-    else if (build <= 18363) {       // Windows 10 version 1909 (Build 18363)
-        offs.ActiveProcessLinks = 0x0000;
-        offs.ImageFileName = 0x0000;
-        offs.Protection = 0x0000;
+    else if (build <= 17415) {       // Windows 8.1 Server 2012R2 and RTM (16384)
+        offs.ActiveProcessLinks = 0x2e8;
+        offs.ImageFileName = 0x438;
+        offs.Protection = 0x67a;
     }
     else if (build <= 19045) {       // Windows 10 version 22H2 (Build 19041)
         offs.ActiveProcessLinks = 0x448;
