@@ -1,6 +1,8 @@
 # 🪞 Doppelganger – Mimic the Soul, Leave No Trace
 Doppelganger is an arcane tool designed to mimic LSASS, extract its secrets, and hide them in plain sight. It builds upon the forbidden arts of HollowReaper, using hollowed processes, kernel exploits, and spectral clones to bypass protection and exfiltrate credentials with stealth.
 
+![Doppelganger_logo](https://github.com/user-attachments/assets/dc6f30fb-3f7d-41aa-9455-5d7d77717fb8)
+
 ## 📜 The Ritual
 ### 💀 HollowReaper.c
 The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
