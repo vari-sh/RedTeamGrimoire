@@ -3,23 +3,41 @@ HollowReaper is a mystical tool crafted to manipulate processes through Process 
 
 ![hollowreaper](https://github.com/user-attachments/assets/fdfa66ff-97b2-4860-a4c3-c022cde5095a)
 
-## 📜 The Components 
-💀 HollowReaper.c - The husk of this dark ritual, this program performs process hollowing, carving out a legitimate process and injecting your custom payload.
+## 📜 The Ritual
+### 💀 HollowReaper.c
+The vessel for your payload. This program performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
 
-💎 LSASS_CDumper.c - The core sacrificial script, an example C code that extracts LSASS memory. It uses BYOVD (Bring Your Own Vulnerable Driver) arcane technique to disable PPL protection from LSASS process acting at Kernel-Land and disable Credential Guard using the technique explained [here](https://github.com/ricardojoserf/NativeBypassCredGuard). This must be compiled, its shellcode must be extracted using Donut and finally xored and inserted in HollowReaper.c.
+### 🧬 LSASS_CDumper.c
+The soul binder. This shellcode:
 
-🗝️ xor20charkey.py - A cryptic enchantment, a Python script to obfuscate shellcode via XOR, ensuring your payload remains unseen in the void.
+🛡️ Disables PPL using the cursed RTCore64.sys driver (BYOVD)
 
-⚙️ RTCore64.sys - An ancient cursed artifact, a vulnerable driver that grants the forbidden power to write directly into kernel memory. Through this relic of flawed craftsmanship, the barriers between userland and kernel are shattered, allowing the wielder to manipulate the very fabric of the operating system. 
+🚫 Disables Credential Guard using forbidden kernel incantations
 
-## 🕯️ The Ritual
-1️⃣ Compile LSASS_CDumper.c into an executable.
+💾 Extracts a Minidump from LSASS memory
 
-2️⃣ Use Donut to extract the shellcode from the compiled binary.
+### 🗝️ xor20charkey.py
+A local obfuscation utility. XOR-encrypts the shellcode using a custom 20-character key, shielding your payload from watchful eyes.
 
-3️⃣ Obfuscate the shellcode using xor20charkey.py.
+### 📦 RTCore64.sys
+A vulnerable driver — the ancient relic that grants direct access to kernel memory. Through this cursed artifact, you pierce the veil between userland and kernel.
 
-4️⃣ Summon HollowReaper to hollow a process and inject your payload into its husk.
+🧪 The Components
+| File	| Purpose |
+|-------|---------|
+|HollowReaper.c	| Hollow a process and inject the embedded shellcode |
+|LSASS_CDumper.c | Shellcode: disable PPL & Credential Guard, dump LSASS |
+|xor20charkey.py | Python script to XOR the shellcode with a 20-char key |
+|RTCore64.sys | Vulnerable driver for kernel memory access (BYOVD) |
 
-----------------------------------------------------------------
-🕯️ Tread carefully, for the void sees all. 🔮✨
+🕯️ Usage Flow
+1️⃣ Compile LSASS_CDumper.c
+2️⃣ Use Donut to convert it into shellcode
+3️⃣ Obfuscate the shellcode using xor20charkey.py
+4️⃣ Embed the result into HollowReaper.c
+5️⃣ Run HollowReaper to hollow a process and unleash the payload
+
+⚠️ Disclaimer
+This tool is provided for educational and research purposes only. Use responsibly.
+The arcane always watches. 🧿
+
