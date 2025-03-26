@@ -22,7 +22,7 @@ A local obfuscation utility. XOR-encrypts the shellcode using a custom 20-charac
 ### 📦 RTCore64.sys
 A vulnerable driver — the ancient relic that grants direct access to kernel memory. Through this cursed artifact, you pierce the veil between userland and kernel.
 
-🧪 The Components
+## 🧪 The Components
 | File	| Purpose |
 |-------|---------|
 |HollowReaper.c	| Hollow a process and inject the embedded shellcode |
@@ -30,12 +30,18 @@ A vulnerable driver — the ancient relic that grants direct access to kernel me
 |xor20charkey.py | Python script to XOR the shellcode with a 20-char key |
 |RTCore64.sys | Vulnerable driver for kernel memory access (BYOVD) |
 
-🕯️ Usage Flow
+## 🕯️ Usage Flow
 1️⃣ Compile LSASS_CDumper.c
+
 2️⃣ Use Donut to convert it into shellcode
+
 3️⃣ Obfuscate the shellcode using xor20charkey.py
+
 4️⃣ Embed the result into HollowReaper.c
+
 5️⃣ Run HollowReaper to hollow a process and unleash the payload
+
+--------------------------------------------------------------------------
 
 ⚠️ Disclaimer
 This tool is provided for educational and research purposes only. Use responsibly.
