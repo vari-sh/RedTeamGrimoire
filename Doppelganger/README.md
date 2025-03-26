@@ -31,15 +31,17 @@ A local decryption utility. Use this to restore the original dump from its XOR-o
 | RTCore64.sys | Vulnerable driver used for PPL bypass (BYOVD) |
 
 ## 🕯️ Usage Flow
-🔨 Compile Doppelganger.c
+1️⃣ Compile Doppelganger.c
 
-🧪 Use Donut to convert it into shellcode
+2️⃣ Use Donut to convert it into shellcode
 
-🧿 Embed the shellcode into HollowReaper.c
+3️⃣ Embed the shellcode into HollowReaper.c
 
-💀 Run HollowReaper to hollow a process and trigger Doppelganger
+4️⃣ Run HollowReaper to hollow a process and trigger Doppelganger
 
-🗝️ Use decrypt_xor_dump.py to decrypt the dumped file offline
+5️⃣ Use decrypt_xor_dump.py to decrypt the dumped file offline
+
+---------------------------------------------------------------------------------
 
 ## ⚠️ Disclaimer:
 This tool is provided for educational and research purposes only. Use responsibly. The arcane always watches. 🧿
