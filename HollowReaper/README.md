@@ -22,7 +22,7 @@ A local obfuscation utility. XOR-encrypts the shellcode using a custom 20-charac
 ### 📦 RTCore64.sys
 A vulnerable driver — the ancient relic that grants direct access to kernel memory. Through this cursed artifact, you pierce the veil between userland and kernel.
 
-## 🧪 The Components
+## ⚗️ The Components
 | File	| Purpose |
 |-------|---------|
 |HollowReaper.c	| Hollow a process and inject the embedded shellcode |
