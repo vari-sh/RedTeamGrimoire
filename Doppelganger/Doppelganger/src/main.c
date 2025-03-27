@@ -1,3 +1,15 @@
+/*
+
+    Author: vari.sh
+
+    Description: - This program impersonates SYSTEM and implements LSASS dump. Creates a log.txt file in C:\Windows\Tasks.
+                 - Additionally, it uses primitives to access memory via the RTCore64 driver,
+                   and reads the EPROCESS structure of lsass.exe to verify the offsets needed for disabling PPL.
+                   It then writes the byte that disables PPL.
+                 - Finally it clones lsass process and perform minidump of the clone, xoring the result using a temp file in order to bypass detection
+
+*/
+
 #define _CRT_SECURE_NO_WARNINGS
 #include "defs.h"
 #include "api.h"
