@@ -4,11 +4,7 @@ Doppelganger is an arcane tool designed to mimic LSASS, extract its secrets, and
 ![Doppelganger_logo](https://github.com/user-attachments/assets/dc6f30fb-3f7d-41aa-9455-5d7d77717fb8)
 
 ## 📜 The Ritual
-### 💀 HollowReaper.c
-The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
-🔧 Instructions for generating the shellcode to embed are provided in the HollowReaper project.
-
-### 🩸 Doppelganger.c
+### 🩸 Doppelganger
 The soul thief. This shellcode:
 
 🛡️ Disables PPL using the cursed RTCore64.sys driver (BYOVD)
@@ -19,19 +15,24 @@ The soul thief. This shellcode:
 
 🗝️ XOR-encrypts the dump and writes it to disk, leaving behind only a shadow
 
-### 🔐 decrypt_xor_dump.py
+### 🧿 Utilities
+#### 💀 HollowReaper.c
+The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
+🔧 Instructions for generating the shellcode to embed are provided in the HollowReaper project.
+
+#### 🔐 decrypt_xor_dump.py
 A local decryption utility. Use this to restore the original dump from its XOR-obfuscated form.
 
-## 🧪 The Components
+## ⚗️ The Components
 | File | Purpose |
 |------|---------|
+| Doppelganger | The shellcode: disable PPL, clone LSASS, dump and XOR |
 | HollowReaper.c |	Hollow a process and inject shellcode |
-| Doppelganger.c | Shellcode: disable PPL, clone LSASS, dump and XOR |
 | decrypt_xor_dump.py | Python tool to decrypt XOR dump |
 | RTCore64.sys | Vulnerable driver used for PPL bypass (BYOVD) |
 
 ## 🕯️ Usage Flow
-1️⃣ Compile Doppelganger.c
+1️⃣ Compile Doppelganger
 
 2️⃣ Use Donut to convert it into shellcode
 
