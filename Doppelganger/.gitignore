@@ -1,0 +1,48 @@
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.vcxproj.filters
+*.suo
+*.user
+*.sdf
+*.ipch
+*.opensdf
+
+# Build output
+Debug/
+Release/
+x64/
+x86/
+*.obj
+*.pdb
+*.exe
+*.ilk
+*.log
+*.tlog
+*.idb
+*.pch
+*.cache
+*.class
+*.dll
+*.lib
+*.exp
+
+# CMake (if used later)
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build/
+
+# Other
+*.DS_Store
+Thumbs.db
+
+# Logs or dumps
+*.dmp
+*.bak
+*.tmp
+*.log
+*.bin
+*.xor
+
