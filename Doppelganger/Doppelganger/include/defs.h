@@ -130,9 +130,14 @@ typedef BOOL(WINAPI* PFN_MDWD)(
     PMINIDUMP_CALLBACK_INFORMATION CallbackParam
     );
 
-typedef DWORD (WINAPI *PFN_GPID)(
-    HANDLE hProcess
-);
+typedef DWORD(WINAPI* PFN_GPID)(
+    HANDLE hProcess   // Handle to the process
+    );
+
+typedef HANDLE(WINAPI* PFN_GCP)(
+    void
+    );
+
 
 // ==========================
 // Function Pointer Declarations (can go in a global header or resolved inside a resolver function)
@@ -150,3 +155,4 @@ extern PFN_STT pSTT;
 extern PFN_ATP pATP;
 extern PFN_LPVA pLPVA;
 extern PFN_MDWD pMDWD;
+extern PFN_GCP pGCP;
