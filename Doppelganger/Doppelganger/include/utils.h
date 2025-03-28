@@ -13,3 +13,4 @@ void xor_decrypt_buffer(unsigned char* buffer, size_t len, const char* key, size
 HMODULE LoadCleanDLL(char* dllPath);
 FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName);
 char* xor_encrypt_buffer(const unsigned char* buffer, size_t len, const char* key, size_t key_len);
+wchar_t* to_wide(const char* str);

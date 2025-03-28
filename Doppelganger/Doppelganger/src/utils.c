@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+// ======================================
+//  Functions to XOR encrypt/decrypt
+// ======================================
 const char* XOR_KEY = "0123456789abcdefghij";
 size_t key_len = 20;
 
@@ -33,6 +36,18 @@ char* xor_encrypt_buffer(const unsigned char* buffer, size_t len, const char* ke
         result[i] = buffer[i] ^ key[i % key_len];
     }
     return result;
+}
+
+// ========================================
+//  Function to convert string to UNICODE
+// ========================================
+wchar_t* to_wide(const char* str) {
+    int len = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+    if (len == 0) return NULL;
+    wchar_t* wstr = (wchar_t*)malloc(len * sizeof(wchar_t));
+    if (!wstr) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr, len);
+    return wstr;
 }
 
 // =====================================================

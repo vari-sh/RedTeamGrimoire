@@ -12,3 +12,6 @@ BOOL EnablePrivilege(HANDLE hToken, const unsigned char* encryptedPriv, size_t e
 
 // Enables all predefined privileges (e.g., SeDebugPrivilege, SeImpersonatePrivilege)
 void EnableAllPrivileges(HANDLE hToken);
+
+// Enable SEDBGPVG on current process
+BOOL EnableSEDBGPRV();
