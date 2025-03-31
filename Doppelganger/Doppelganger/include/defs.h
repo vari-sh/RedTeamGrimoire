@@ -155,4 +155,5 @@ extern PFN_STT pSTT;
 extern PFN_ATP pATP;
 extern PFN_LPVA pLPVA;
 extern PFN_MDWD pMDWD;
+extern PFN_GPID pGPID;
 extern PFN_GCP pGCP;
