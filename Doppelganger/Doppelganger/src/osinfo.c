@@ -2,6 +2,8 @@
 #include <psapi.h>
 #include "osinfo.h"
 #include "logger.h"
+#include "api.h"
+#include "defs.h"
 
 // =====================================================
 // OS Information Functions
@@ -11,10 +13,10 @@ unsigned long long getKBAddr() {
     DWORD cbNeeded = 0;
     PVOID* base = NULL;
 
-    if (EnumDeviceDrivers(NULL, 0, &cbNeeded)) {
+    if (pEDD(NULL, 0, &cbNeeded)) {
         base = (PVOID*)malloc(cbNeeded);
         if (base) {
-            if (EnumDeviceDrivers(base, cbNeeded, &cbNeeded)) {
+            if (pEDD(base, cbNeeded, &cbNeeded)) {
                 unsigned long long addr = (unsigned long long)base[0];
                 free(base);
                 return addr;

