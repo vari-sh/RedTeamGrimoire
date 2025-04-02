@@ -64,8 +64,7 @@ HMODULE LoadCleanDLL(char* dllPath) {
     else
     {
         log_error("Failed to load %s. Error: %lu", dllPath, GetLastError());
-    }
-    */
+    }*/
 
     return hDLL;
 }

