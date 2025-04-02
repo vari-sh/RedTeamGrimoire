@@ -1,5 +1,6 @@
 #include "driver.h"
 #include "logger.h"
+#include "api.h"
 
 // =====================================================
 // Driver loading and unloading
@@ -7,16 +8,16 @@
 
 // Helper function to open the Service Control Manager with the specified access rights
 static SC_HANDLE OpenSCManagerHandle(DWORD dwAccess) {
-    SC_HANDLE hSCM = OpenSCManager(NULL, NULL, dwAccess);
+    SC_HANDLE hSCM = pOSCM(NULL, NULL, dwAccess);
     if (!hSCM) {
-        log_error("OpenSCManager failed. Error code: %lu", GetLastError());
+        log_error("OSCM failed. Error code: %lu", GetLastError());
     }
     return hSCM;
 }
 
 // Helper function to create or open the driver service
 static SC_HANDLE CreateOrOpenDriverService(SC_HANDLE hSCM, const char* driverName, const char* driverPath) {
-    SC_HANDLE hService = CreateServiceA(
+    SC_HANDLE hService = pCS(
         hSCM,
         driverName,          // Internal service name
         driverName,          // Display name
@@ -30,7 +31,7 @@ static SC_HANDLE CreateOrOpenDriverService(SC_HANDLE hSCM, const char* driverNam
     if (!hService) {
         DWORD err = GetLastError();
         if (err == ERROR_SERVICE_EXISTS) {
-            hService = OpenServiceA(hSCM, driverName, SERVICE_ALL_ACCESS);
+            hService = pOS(hSCM, driverName, SERVICE_ALL_ACCESS);
             if (hService) {
                 log_success("Existing service opened successfully.");
             }
@@ -42,7 +43,7 @@ static SC_HANDLE CreateOrOpenDriverService(SC_HANDLE hSCM, const char* driverNam
             log_error("Service is marked for deletion.");
         }
         else {
-            log_error("CreateService error. Error code: %lu", err);
+            log_error("CS error. Error code: %lu", err);
         }
     }
     else {
@@ -59,18 +60,18 @@ int LoadAndStartDriver(void) {
 
     SC_HANDLE hService = CreateOrOpenDriverService(hSCM, DRIVER_NAME, DRIVER_PATH);
     if (!hService) {
-        CloseServiceHandle(hSCM);
+        pCSH(hSCM);
         return 1;
     }
 
     // Start the driver service
-    if (!StartServiceA(hService, 0, NULL)) {
+    if (!pSS(hService, 0, NULL)) {
         DWORD err = GetLastError();
         if (err != ERROR_SERVICE_ALREADY_RUNNING) {
-            log_error("StartService error. Error code: %lu", err);
-            DeleteService(hService);
-            CloseServiceHandle(hService);
-            CloseServiceHandle(hSCM);
+            log_error("SS error. Error code: %lu", err);
+            pDS(hService);
+            pCSH(hService);
+            pCSH(hSCM);
             return 1;
         }
         else {
@@ -82,8 +83,8 @@ int LoadAndStartDriver(void) {
     }
 
     // Close the handles
-    CloseServiceHandle(hService);
-    CloseServiceHandle(hSCM);
+    pCSH(hService);
+    pCSH(hSCM);
     return 0;
 }
 
@@ -93,32 +94,28 @@ int StopAndUnloadDriver(const char* driverName) {
     if (!hSCM)
         return 1;
 
-    SC_HANDLE hService = OpenServiceA(hSCM, driverName, SERVICE_STOP | DELETE | SERVICE_QUERY_STATUS);
+    SC_HANDLE hService = pOS(hSCM, driverName, SERVICE_STOP | DELETE | SERVICE_QUERY_STATUS);
     if (!hService) {
         DWORD err = GetLastError();
         if (err == ERROR_SERVICE_DOES_NOT_EXIST) {
             log_error("Service does not exist.");
-            CloseServiceHandle(hSCM);
+            pCSH(hSCM);
             return 0;
         }
         else if (err == ERROR_SERVICE_MARKED_FOR_DELETE) {
             log_info("Service is already marked for deletion.");
-            CloseServiceHandle(hSCM);
+            pCSH(hSCM);
             return 0;
         }
         else {
-            log_error("Error: %s.", err);
-            CloseServiceHandle(hSCM);
+            log_error("Error: %lu.", err);
+            pCSH(hSCM);
             return 0;
         }
-        log_error("OpenService failed. Error code: %lu", err);
-        CloseServiceHandle(hSCM);
-        return 1;
-
     }
 
     SERVICE_STATUS status;
-    if (!ControlService(hService, SERVICE_CONTROL_STOP, &status)) {
+    if (!pCSVC(hService, SERVICE_CONTROL_STOP, &status)) {
         DWORD err = GetLastError();
         if (err == ERROR_SERVICE_NOT_ACTIVE) {
             log_info("The service is not active.");
@@ -132,15 +129,15 @@ int StopAndUnloadDriver(const char* driverName) {
     }
 
     // Attempt to delete the service
-    if (!DeleteService(hService)) {
+    if (!pDS(hService)) {
         DWORD err = GetLastError();
         if (err == ERROR_SERVICE_MARKED_FOR_DELETE) {
             log_info("Service is already marked for deletion.");
         }
         else {
             log_error("DeleteService failed. Error code: %lu", err);
-            CloseServiceHandle(hService);
-            CloseServiceHandle(hSCM);
+            pCSH(hService);
+            pCSH(hSCM);
             return 1;
         }
     }
@@ -149,7 +146,7 @@ int StopAndUnloadDriver(const char* driverName) {
     }
 
     // Close the handles
-    CloseServiceHandle(hService);
-    CloseServiceHandle(hSCM);
+    pCSH(hService);
+    pCSH(hSCM);
     return 0;
 }

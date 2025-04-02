@@ -138,9 +138,96 @@ typedef HANDLE(WINAPI* PFN_GCP)(
     void
     );
 
+typedef HANDLE(WINAPI* PFN_CFA)(
+    LPCSTR lpFileName,
+    DWORD dwDesiredAccess,
+    DWORD dwShareMode,
+    LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+    DWORD dwCreationDisposition,
+    DWORD dwFlagsAndAttributes,
+    HANDLE hTemplateFile
+    );
+
+typedef BOOL(WINAPI* PFN_DIOC)(
+    HANDLE hDevice,
+    DWORD dwIoControlCode,
+    LPVOID lpInBuffer,
+    DWORD nInBufferSize,
+    LPVOID lpOutBuffer,
+    DWORD nOutBufferSize,
+    LPDWORD lpBytesReturned,
+    LPOVERLAPPED lpOverlapped
+    );
+
+typedef HMODULE(WINAPI* PFN_LLW)(
+    LPCWSTR LoadLibraryW_t
+    );
+
+typedef BOOL(WINAPI* PFN_EDD)(
+    LPVOID* lpImageBase,
+    DWORD cb,
+    LPDWORD lpcbNeeded
+    );
+
+// OpenSCManagerA
+typedef SC_HANDLE(WINAPI* PFN_OSCM)(
+    LPCSTR lpMachineName,
+    LPCSTR lpDatabaseName,
+    DWORD dwDesiredAccess
+    );
+
+// CreateServiceA
+typedef SC_HANDLE(WINAPI* PFN_CS)(
+    SC_HANDLE hSCManager,
+    LPCSTR lpServiceName,
+    LPCSTR lpDisplayName,
+    DWORD dwDesiredAccess,
+    DWORD dwServiceType,
+    DWORD dwStartType,
+    DWORD dwErrorControl,
+    LPCSTR lpBinaryPathName,
+    LPCSTR lpLoadOrderGroup,
+    LPDWORD lpdwTagId,
+    LPCSTR lpDependencies,
+    LPCSTR lpServiceStartName,
+    LPCSTR lpPassword
+    );
+
+// OpenServiceA
+typedef SC_HANDLE(WINAPI* PFN_OS)(
+    SC_HANDLE hSCManager,
+    LPCSTR lpServiceName,
+    DWORD dwDesiredAccess
+    );
+
+// StartServiceA
+typedef BOOL(WINAPI* PFN_SS)(
+    SC_HANDLE hService,
+    DWORD dwNumServiceArgs,
+    LPCSTR* lpServiceArgVectors
+    );
+
+// ControlService
+typedef BOOL(WINAPI* PFN_CSVC)(
+    SC_HANDLE hService,
+    DWORD dwControl,
+    LPSERVICE_STATUS lpServiceStatus
+    );
+
+// DeleteService
+typedef BOOL(WINAPI* PFN_DS)(
+    SC_HANDLE hService
+    );
+
+// CloseServiceHandle
+typedef BOOL(WINAPI* PFN_CSH)(
+    SC_HANDLE hSCObject
+    );
+
+
 
 // ==========================
-// Function Pointer Declarations (can go in a global header or resolved inside a resolver function)
+// Function Pointer Declarations
 // ==========================
 extern PFN_P32F pP32F;
 extern PFN_P32N pP32N;
@@ -157,3 +244,14 @@ extern PFN_LPVA pLPVA;
 extern PFN_MDWD pMDWD;
 extern PFN_GPID pGPID;
 extern PFN_GCP pGCP;
+extern PFN_CFA pCFA;
+extern PFN_DIOC pDIOC;
+extern PFN_LLW pLLW;
+extern PFN_EDD pEDD;
+extern PFN_OSCM pOSCM;
+extern PFN_CS pCS;
+extern PFN_OS pOS;
+extern PFN_SS pSS;
+extern PFN_CSVC pCSVC;
+extern PFN_DS pDS;
+extern PFN_CSH pCSH;

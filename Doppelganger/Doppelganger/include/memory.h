@@ -33,3 +33,4 @@ DWORD64 ReadMemoryDWORD64(HANDLE Device, DWORD64 Address);
 void WriteMemoryDWORD64(HANDLE Device, DWORD64 Address, DWORD64 Value);
 BOOL ReadMemoryBuffer(HANDLE Device, DWORD64 Address, void* Buffer, DWORD BufferSize);
 void disablePPL();
+void restorePPL();

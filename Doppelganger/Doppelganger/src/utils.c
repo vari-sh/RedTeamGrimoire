@@ -56,6 +56,7 @@ wchar_t* to_wide(const char* str) {
 HMODULE LoadCleanDLL(char* dllPath) {
 
     HMODULE hDLL = LoadLibraryA(dllPath);
+    /* DEBUG
     if (hDLL)
     {
         log_success("Loaded clean copy of %s at: %p", dllPath, hDLL);
@@ -64,6 +65,7 @@ HMODULE LoadCleanDLL(char* dllPath) {
     {
         log_error("Failed to load %s. Error: %lu", dllPath, GetLastError());
     }
+    */
 
     return hDLL;
 }
