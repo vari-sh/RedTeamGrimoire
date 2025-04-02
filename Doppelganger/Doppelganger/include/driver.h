@@ -3,7 +3,7 @@
 
 // Driver parameters
 #define DRIVER_NAME "mDriver"
-#define DRIVER_PATH "C:\\Windows\\Tasks\\RTCore64.sys"
+#define DRIVER_PATH "C:\\Users\\Public\\RTCore64.sys"
 #define DEVICE_NAME L"\\\\.\\RTCore64"
 
 // IOCTL codes for RTCORE64
