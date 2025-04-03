@@ -46,7 +46,7 @@ In order to use Doppelganger you must place RTCore64.sys in C:\Users\Public. Dop
 ```
 .\donut.exe -a 2 -f 7 -i Doppelganger.exe
 ```
-3️⃣ Embed the shellcode into HollowReaper.c
+3️⃣ XOR the shellcode and embed the shellcode into HollowReaper.c
 
 4️⃣ Run HollowReaper to hollow a process and trigger Doppelganger (all files saved to C:\Users\Public)
 ```
