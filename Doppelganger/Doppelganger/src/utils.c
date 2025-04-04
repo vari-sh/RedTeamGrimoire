@@ -21,21 +21,11 @@ char* xor_decrypt_string(const unsigned char* cipher, size_t len, const char* ke
     return result;
 }
 
-void xor_decrypt_buffer(unsigned char* buffer, size_t len, const char* key, size_t key_len)
+void xor_buffer(unsigned char* buffer, size_t len, const char* key, size_t key_len)
 {
     for (size_t i = 0; i < len; i++) {
         buffer[i] ^= key[i % key_len];
     }
-}
-
-// Function to XOR the dmp file
-char* xor_encrypt_buffer(const unsigned char* buffer, size_t len, const char* key, size_t key_len) {
-    char* result = (char*)malloc(len);
-    if (!result) return NULL;
-    for (size_t i = 0; i < len; i++) {
-        result[i] = buffer[i] ^ key[i % key_len];
-    }
-    return result;
 }
 
 // ========================================
