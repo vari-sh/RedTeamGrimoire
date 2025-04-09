@@ -4,7 +4,7 @@
        - This program implements process hollowing (it creates a suspended process,
          injects a deobfuscated shellcode via XOR, and then resumes the thread).
 
-    Usage: Doppelganger.exe "C:\windows\explorer.exe"
+    Usage: HollowReaper.exe "C:\windows\explorer.exe"
 
 */
 
@@ -262,7 +262,7 @@ typedef HANDLE(WINAPI* PFN_GCP)(
 // =====================================================
 int main(int argc, char* argv[]) {
     // Start
-    printf("[+] Starting Doppelganger\n");
+    printf("[+] Starting HollowReaper\n");
     Sleep(5000);
 
     // Load clean versions of DLLs
