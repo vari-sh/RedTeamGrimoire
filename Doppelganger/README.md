@@ -59,5 +59,55 @@ python .\decrypt_xor_dump.py .\doppelganger.dmp
 
 ---------------------------------------------------------------------------------
 
+## 🧙‍♂️ Counterspell - YARA Rules
+
+The following YARA rules can be used to detect Doppelganger binary, artifacts, and opcode stubs in memory or on disk.
+
+These rules were generated using [`yarGen`](https://github.com/Neo23x0/yarGen) to match unique patterns such as string constants related to the Doppelganger LSASS dumper.
+
+<details>
+<summary>Click to expand YARA rules</summary>
+
+```yara
+rule Doppelganger {
+   meta:
+      description = " - file Doppelganger.exe"
+      author = "yarGen Rule Generator"
+      reference = "https://github.com/Neo23x0/yarGen"
+      date = "2025-04-14"
+      hash1 = "203b32b5579bd7e8450eb3ff00bb80826ed38814b3fa121e5a4ac22e7bff060e"
+   strings:
+      $x1 = "C:\\Users\\Public\\RTCore64.sys" fullword ascii
+      $x2 = "C:\\Users\\Public\\log.txt" fullword ascii
+      $x3 = "C:\\Users\\varii\\RedTeam\\RedTeamGrimoire\\Doppelganger\\x64\\Release\\Doppelganger.pdb" fullword ascii
+      $s4 = "C:\\Users\\Public\\doppelganger.dmp" fullword ascii
+      $s5 = "uwinlogon.exe" fullword wide
+      $s6 = "Failed to open lsass.exe" fullword ascii
+      $s7 = "Failed to dump and XOR LSASS." fullword ascii
+      $s8 = "Error getting current process handle" fullword ascii
+      $s9 = "Failed to write XORed dump to file. Error: %lu" fullword ascii
+      $s10 = "XOR'd dump written to %s successfully" fullword ascii
+      $s11 = "Execution completed successfully." fullword ascii
+      $s12 = "Starting dump to memory buffer" fullword ascii
+      $s13 = "ImpersonateLoggedOnUser failed." fullword ascii
+      $s14 = "Failed to allocate memory for dump buffer" fullword ascii
+      $s15 = "Dump failed. Error: %lu" fullword ascii
+      $s16 = "LookupPrivilegeValue failed for %s. Error: %lu" fullword ascii
+      $s17 = "        <requestedExecutionLevel level='asInvoker' uiAccess='false' />" fullword ascii
+      $s18 = "Successfully cloned process, handle: 0x%p" fullword ascii
+      $s19 = "Found process: %ls (PID: %lu)" fullword ascii
+      $s20 = "Successfully duplicated token. Process can now run as SYSTEM." fullword ascii
+      $op0 = { 33 d2 48 8d 4d a4 41 b8 34 02 00 00 e8 17 2f 00 }
+      $op1 = { 48 8d 15 61 3a 00 00 48 8d 4d cc ff 15 37 34 00 }
+      $op2 = { 0f b6 05 cb 36 00 00 34 6c 88 03 0f b6 05 c1 36 }
+      $op3 = { 0f b6 05 59 35 00 00 34 5e 88 03 0f b6 05 4f 35 }
+      $op4 = { 0f b6 05 88 2b 00 00 34 6c 88 03 0f b6 05 7e 2b }
+   condition:
+      uint16(0) == 0x5a4d and filesize < 100KB and
+      ( 1 of ($x*) and 4 of them and all of ($op*) )
+}
+```
+</details>
+
 ## ⚠️ Disclaimer:
 This tool is provided for educational and research purposes only. Use responsibly. The arcane always watches. 🧿
