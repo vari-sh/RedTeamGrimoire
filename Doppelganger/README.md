@@ -15,6 +15,8 @@ The soul thief. This shellcode:
 
 🗝️ XOR-encrypts the dump and writes it to disk, leaving behind only a shadow
 
+📜 Writes logs in C:\Users\Public\log.txt
+
 ### 🧿 Utilities
 #### 💀 HollowReaper.c
 The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
