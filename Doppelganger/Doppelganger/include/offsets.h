@@ -10,3 +10,5 @@ typedef struct _Offsets {
 
 // Function do get correct OS offsets
 Offsets getOffsets();
+// Function to get architechture
+BOOL is_x64();
