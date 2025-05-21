@@ -81,24 +81,23 @@ rule Doppelganger {
    strings:
       $x1 = "C:\\Users\\Public\\RTCore64.sys" fullword ascii
       $x2 = "C:\\Users\\Public\\log.txt" fullword ascii
-      $x3 = "C:\\Users\\varii\\RedTeam\\RedTeamGrimoire\\Doppelganger\\x64\\Release\\Doppelganger.pdb" fullword ascii
-      $s4 = "C:\\Users\\Public\\doppelganger.dmp" fullword ascii
-      $s5 = "uwinlogon.exe" fullword wide
-      $s6 = "Failed to open lsass.exe" fullword ascii
-      $s7 = "Failed to dump and XOR LSASS." fullword ascii
-      $s8 = "Error getting current process handle" fullword ascii
-      $s9 = "Failed to write XORed dump to file. Error: %lu" fullword ascii
-      $s10 = "XOR'd dump written to %s successfully" fullword ascii
-      $s11 = "Execution completed successfully." fullword ascii
-      $s12 = "Starting dump to memory buffer" fullword ascii
-      $s13 = "ImpersonateLoggedOnUser failed." fullword ascii
-      $s14 = "Failed to allocate memory for dump buffer" fullword ascii
-      $s15 = "Dump failed. Error: %lu" fullword ascii
-      $s16 = "LookupPrivilegeValue failed for %s. Error: %lu" fullword ascii
-      $s17 = "        <requestedExecutionLevel level='asInvoker' uiAccess='false' />" fullword ascii
-      $s18 = "Successfully cloned process, handle: 0x%p" fullword ascii
-      $s19 = "Found process: %ls (PID: %lu)" fullword ascii
-      $s20 = "Successfully duplicated token. Process can now run as SYSTEM." fullword ascii
+      $s3 = "C:\\Users\\Public\\doppelganger.dmp" fullword ascii
+      $s4 = "uwinlogon.exe" fullword wide
+      $s5 = "Failed to open lsass.exe" fullword ascii
+      $s6 = "Failed to dump and XOR LSASS." fullword ascii
+      $s7 = "Error getting current process handle" fullword ascii
+      $s8 = "Failed to write XORed dump to file. Error: %lu" fullword ascii
+      $s9 = "XOR'd dump written to %s successfully" fullword ascii
+      $s10 = "Execution completed successfully." fullword ascii
+      $s11 = "Starting dump to memory buffer" fullword ascii
+      $s12 = "ImpersonateLoggedOnUser failed." fullword ascii
+      $s13 = "Failed to allocate memory for dump buffer" fullword ascii
+      $s14 = "Dump failed. Error: %lu" fullword ascii
+      $s15 = "LookupPrivilegeValue failed for %s. Error: %lu" fullword ascii
+      $s16 = "        <requestedExecutionLevel level='asInvoker' uiAccess='false' />" fullword ascii
+      $s17 = "Successfully cloned process, handle: 0x%p" fullword ascii
+      $s18 = "Found process: %ls (PID: %lu)" fullword ascii
+      $s19 = "Successfully duplicated token. Process can now run as SYSTEM." fullword ascii
       $op0 = { 33 d2 48 8d 4d a4 41 b8 34 02 00 00 e8 17 2f 00 }
       $op1 = { 48 8d 15 61 3a 00 00 48 8d 4d cc ff 15 37 34 00 }
       $op2 = { 0f b6 05 cb 36 00 00 34 6c 88 03 0f b6 05 c1 36 }
