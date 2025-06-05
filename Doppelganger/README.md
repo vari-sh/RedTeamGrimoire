@@ -3,6 +3,10 @@ Doppelganger is an arcane tool designed to mimic LSASS, extract its secrets, and
 
 ![Doppelganger_logo](https://github.com/user-attachments/assets/dc6f30fb-3f7d-41aa-9455-5d7d77717fb8)
 
+## Blogpost
+- https://vari-sh.github.io/posts/doppelganger/
+- https://labs.yarix.com/2025/06/doppelganger-an-advanced-lsass-dumper-with-process-cloning/
+
 ## 📜 The Ritual
 ### 🩸 Doppelganger
 The soul thief. This shellcode:
