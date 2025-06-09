@@ -1,5 +1,12 @@
-# 💀 HollowReaper - Hollow the Living, Control the Void
-HollowReaper is a mystical tool crafted to manipulate processes through Process Hollowing, allowing seamless injection of custom shellcode into a legitimate process. This arcane art lets you erase a process’s soul and replace it with your own will.
+# 💀 HollowReaper – Process Hollowing Shellcode Launcher for Stealth Payload Execution
+
+**HollowReaper** is a red team utility for stealthy **process hollowing**. It replaces the memory of a legitimate process with custom shellcode, allowing you to execute payloads under the guise of trusted binaries.
+
+This technique evades traditional security controls by injecting directly into a remote process's memory after unmapping its image, commonly used to execute LSASS dumper shellcode without spawning suspicious processes.
+
+> 🧠 Common payloads include: LSASS clone & dump shellcode, Beacon loaders, or BYOVD-based PPL bypassers.
+
+Once prepared, HollowReaper serves as a "vessel" to deploy your enchanted shellcode into the void of a hollowed process.
 
 ![hollowreaper](https://github.com/user-attachments/assets/fdfa66ff-97b2-4860-a4c3-c022cde5095a)
 
