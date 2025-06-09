@@ -1,5 +1,15 @@
-# 🪞 Doppelganger, LSASS Dumper – Mimic the Soul, Leave No Trace
-Doppelganger is an arcane tool designed to mimic and dump LSASS, extract its secrets, and hide them in plain sight. It builds upon the forbidden arts of HollowReaper, using hollowed processes, kernel exploits, and spectral clones to bypass protection and exfiltrate credentials with stealth.
+# 🪞 Doppelganger – Advanced LSASS Dumper with PPL Bypass and Process Cloning
+
+**Doppelganger** is a powerful LSASS dumping tool for red team operations. It bypasses Protected Process Light (PPL), clones `lsass.exe`, and performs a stealthy memory dump – encrypted and ready for offline extraction.
+
+Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled by:
+- Using a BYOVD (Bring Your Own Vulnerable Driver) to disable PPL
+- Cloning `lsass.exe` to evade direct memory access detection
+- Dumping and XOR-obfuscating the clone to disk
+
+🛠️ Built in C, designed for stealth, and compatible with process hollowing frameworks like HollowReaper.
+
+> 🧠 Ideal for red teamers, malware developers, or researchers needing full LSASS dumps on hardened targets.
 
 ![Doppelganger_logo](https://github.com/user-attachments/assets/dc6f30fb-3f7d-41aa-9455-5d7d77717fb8)
 
