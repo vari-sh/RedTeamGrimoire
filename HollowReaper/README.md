@@ -8,7 +8,11 @@ This technique evades traditional security controls by injecting directly into a
 
 Once prepared, HollowReaper serves as a "vessel" to deploy your enchanted shellcode into the void of a hollowed process.
 
-![hollowreaper](https://github.com/user-attachments/assets/fdfa66ff-97b2-4860-a4c3-c022cde5095a)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/fdfa66ff-97b2-4860-a4c3-c022cde5095a" width="400"/>
+</p>
+
+
 
 ## 📜 The Ritual
 ### 💀 HollowReaper.c
