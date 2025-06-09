@@ -11,7 +11,9 @@ Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled 
 
 > 🧠 Ideal for red teamers, malware developers, or researchers needing full LSASS dumps on hardened targets.
 
-![Doppelganger_logo](https://github.com/user-attachments/assets/dc6f30fb-3f7d-41aa-9455-5d7d77717fb8)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/dc6f30fb-3f7d-41aa-9455-5d7d77717fb8" width="400"/>
+</p>
 
 ## Blogpost
 - https://vari-sh.github.io/posts/doppelganger/
