@@ -19,6 +19,9 @@ Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled 
 - https://vari-sh.github.io/posts/doppelganger/
 - https://labs.yarix.com/2025/06/doppelganger-an-advanced-lsass-dumper-with-process-cloning/
 
+## HACKSTOP 2025 Presentation
+- https://www.youtube.com/watch?v=dVPcqNF4j4c
+
 ## 📜 The Ritual
 ### 🩸 Doppelganger
 The soul thief. This shellcode:
