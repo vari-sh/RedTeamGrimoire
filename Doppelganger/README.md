@@ -1,4 +1,4 @@
-# 🪞 Doppelganger – Advanced LSASS Dumper with PPL Bypass and Process Cloning
+# 🎭 Doppelganger – Advanced LSASS Dumper with PPL Bypass and Process Cloning
 
 **Doppelganger** is a powerful LSASS dumping tool for red team operations. It bypasses Protected Process Light (PPL), clones `lsass.exe`, and performs a stealthy memory dump – encrypted and ready for offline extraction.
 
