@@ -43,6 +43,9 @@ The vessel for your payload. This performs process hollowing, carving out a legi
 #### 🔐 decrypt_xor_dump.py
 A local decryption utility. Use this to restore the original dump from its XOR-obfuscated form.
 
+#### 🎫 raw_TGT_extractor_win11.py
+Extracts raw Kerberos tickets from the minidump.
+
 ## ⚗️ The Components
 | File | Purpose |
 |------|---------|
