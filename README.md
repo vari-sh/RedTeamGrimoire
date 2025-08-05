@@ -9,7 +9,7 @@ Step into the Red Team Grimoire, a tome of digital witchcraft where dark magic m
 
 ## 🔮 Contents of the Grimoire 🔮
 
-🪞 [Doppelganger](./Doppelganger) – Advanced LSASS Dumper with PPL Bypass. Clone lsass.exe, dump it stealthily, and exfiltrate credentials under a veil of arcane obfuscation.
+🎭 [Doppelganger](./Doppelganger) – Advanced LSASS Dumper with PPL Bypass. Clone lsass.exe, dump it stealthily, and exfiltrate credentials under a veil of arcane obfuscation.
 
 💀 [HollowReaper](./HollowReaper) – Process hollowing ritual. Pierce the shell of a benign process and inject your custom payload within.
 
