@@ -23,8 +23,7 @@ Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled 
 - https://www.youtube.com/watch?v=dVPcqNF4j4c
 
 ## 📜 The Ritual
-### 🩸 Doppelganger
-The soul thief. This shellcode:
+### 🎭 Doppelganger
 
 🛡️ Disables PPL using the cursed RTCore64.sys driver (BYOVD)
 
