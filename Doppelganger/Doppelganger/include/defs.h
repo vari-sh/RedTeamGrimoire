@@ -131,7 +131,7 @@ typedef BOOL(WINAPI* PFN_MDWD)(
     );
 
 typedef DWORD(WINAPI* PFN_GPID)(
-    HANDLE hProcess   // Handle to the process
+    HANDLE hProcess
     );
 
 typedef HANDLE(WINAPI* PFN_GCP)(

