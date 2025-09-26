@@ -262,7 +262,7 @@ typedef HANDLE(WINAPI* PFN_GCP)(
 // =====================================================
 int main(int argc, char* argv[]) {
     // Start
-    printf("[+] Starting Doppelganger\n");
+    printf("[+] Starting HollowReaper\n");
     Sleep(5000);
 
     // Load clean versions of DLLs
@@ -505,3 +505,4 @@ int main(int argc, char* argv[]) {
     printf("[+] Operation completed.\n");
     return 0;
 }
+
