@@ -23,7 +23,7 @@ Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled 
 - https://www.youtube.com/watch?v=dVPcqNF4j4c
 
 ## Support
-[BuyMeACoffee](https://buymeacoffee.com/vari.sh)
+- [BuyMeACoffee](https://buymeacoffee.com/vari.sh)
 
 ## 📜 The Ritual
 ### 🎭 Doppelganger
