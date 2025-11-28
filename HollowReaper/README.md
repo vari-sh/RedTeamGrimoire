@@ -9,10 +9,8 @@ This technique evades traditional security controls by injecting directly into a
 Once prepared, HollowReaper serves as a "vessel" to deploy your enchanted shellcode into the void of a hollowed process.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/fdfa66ff-97b2-4860-a4c3-c022cde5095a" width="400"/>
+  <img src="https://github.com/user-attachments/assets/beee6155-e46a-4baf-a15d-1965fe3d06bb" width="500"/>
 </p>
-
-
 
 ## 📜 The Ritual
 ### 💀 HollowReaper.c
@@ -57,4 +55,5 @@ A vulnerable driver — the ancient relic that grants direct access to kernel me
 ⚠️ Disclaimer
 This tool is provided for educational and research purposes only. Use responsibly.
 The arcane always watches. 🧿
+
 
