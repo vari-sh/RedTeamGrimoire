@@ -3,7 +3,7 @@
 > *"The Ferryman waits. Pay the coin, and he shall guide your payload across the river Styx, past the watchful eyes of the guardians, into the realm of the living kernel."*
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/508a1e63-b0bb-4984-becb-2cfcc075d7ce" width="400"/>
+  <img src="https://github.com/user-attachments/assets/381e2857-5b52-472b-aa5c-3987b19ef205" width="500"/>
 </p>
 
 **Charon** is a standalone, self-compiling artifact builder designed for Red Team operations. It creates a specialized vessel (executable) for your shellcode that utilizes advanced evasion techniques to bypass EDR hooks and static analysis.
