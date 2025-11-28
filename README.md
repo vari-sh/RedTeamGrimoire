@@ -13,6 +13,8 @@ Step into the Red Team Grimoire, a tome of digital witchcraft where dark magic m
 
 💀 [HollowReaper](./HollowReaper) – Process hollowing ritual. Pierce the shell of a benign process and inject your custom payload within.
 
+🚣 [Charon](./Charon) - The Ferryman of Artifacts. A standalone builder that forges a vessel to transport your shellcode across the River Styx of modern defenses.
+
 🕯️ TGTConjuring - Conjure Kerberos TGTs from the void. Inject tickets to impersonate users across the domain.
 
 🧟 NecroMirror - Reflect system shadows. Dump SAM, SECURITY, SOFTWARE, and SYSTEM from Volume Shadow Copies.
