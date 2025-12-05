@@ -376,12 +376,14 @@ unsigned char* ReadFileBytes(const char* filename, DWORD* outSize) {
 char* BytesToHexString(unsigned char* data, DWORD size) {
     char* hexStr = (char*)malloc(size * 6 + 10);
     if (!hexStr) return NULL;
-    hexStr[0] = '\0';
-    char tmp[8];
+
+    char* ptr = hexStr;
     for (DWORD i = 0; i < size; i++) {
-        sprintf(tmp, "0x%02X", data[i]);
-        strcat(hexStr, tmp);
-        if (i < size - 1) strcat(hexStr, ", ");
+        if (i < size - 1) {
+            ptr += sprintf(ptr, "0x%02X, ", data[i]);
+        } else {
+            ptr += sprintf(ptr, "0x%02X", data[i]);
+        }
     }
     return hexStr;
 }
