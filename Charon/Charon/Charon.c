@@ -379,38 +379,51 @@ char* BytesToHexString(unsigned char* data, DWORD size) {
 
     char* ptr = hexStr;
     for (DWORD i = 0; i < size; i++) {
-        if (i < size - 1) {
+        if (i < size - 1) {        
             ptr += sprintf(ptr, "0x%02X, ", data[i]);
-        } else {
+        }
+        else {
             ptr += sprintf(ptr, "0x%02X", data[i]);
         }
     }
-    return hexStr;
+    return hexStr; 
 }
 
 char* ReplacePattern(const char* original, const char* pattern, const char* replacement) {
-    char* result;
-    int i, cnt = 0;
+    if (!original || !pattern || !replacement) return NULL;
+
     int newWlen = strlen(replacement);
     int oldWlen = strlen(pattern);
-    for (i = 0; original[i] != '\0'; i++) {
-        if (strstr(&original[i], pattern) == &original[i]) {
-            cnt++;
-            i += oldWlen - 1;
-        }
+    int cnt = 0;
+    const char* p;
+
+    p = original;
+    while ((p = strstr(p, pattern))) {
+        cnt++;
+        p += oldWlen;
     }
-    result = (char*)malloc(i + cnt * (newWlen - oldWlen) + 1);
+
+    size_t newSize = strlen(original) + cnt * (newWlen - oldWlen) + 1;
+    char* result = (char*)malloc(newSize);
     if (!result) return NULL;
-    i = 0;
-    while (*original) {
-        if (strstr(original, pattern) == original) {
-            strcpy(&result[i], replacement);
-            i += newWlen;
-            original += oldWlen;
-        }
-        else result[i++] = *original++;
+
+    char* dest = result;
+    p = original;
+    const char* found;
+
+    while ((found = strstr(p, pattern))) {
+        size_t len = found - p;
+        memcpy(dest, p, len);
+        dest += len;
+
+        memcpy(dest, replacement, newWlen);
+        dest += newWlen;
+
+        p = found + oldWlen;
     }
-    result[i] = '\0';
+
+    strcpy(dest, p);
+
     return result;
 }
 
