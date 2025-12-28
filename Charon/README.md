@@ -82,7 +82,7 @@ Deploy `CharonArtifact.exe` to the target machine. Upon execution, it will:
 
 This tool was forged using knowledge and techniques shared by the masters of the craft.
 
-* **[Helvio Junior](https://github.com/helviojunior/hookchain/tree/main): For the HookChain technique, enabling transparent IAT redirection to indirect syscalls, allowing support for complex payloads.
+* **[Helvio Junior](https://github.com/helviojunior/hookchain/tree/main):** For the HookChain technique, enabling transparent IAT redirection to indirect syscalls, allowing support for complex payloads.
 * **[Maldev Academy](https://maldevacademy.com):** The core logic for **HellHall**, **Tartarus Gate**, and the foundational concepts of Indirect Syscalls and API Hashing are derived from their exceptional course materials and research.
 * **[trickster0](https://github.com/trickster0/TartarusGate):** For the original Tartarus Gate research.
 
