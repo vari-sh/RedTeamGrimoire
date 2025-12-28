@@ -12,6 +12,9 @@
 
 Charon weaves together several potent techniques to ensure the payload's safe passage:
 
+* **HookChain (IAT Redirection & Syscall Integration):**
+    Based on the research by Helvio Junior, this technique enables Charon to "hook itself" and the loaded payload. By dynamically generating hundreds of assembly stubs and patching the Import Address Table (IAT), Charon redirects standard API calls (like those made by complex payloads such as Mimikatz) to its internal indirect syscall engine. This ensures that all interactions with the kernel bypass EDR user-land hooks, not just the loader's initial operations.
+
 * **Tartarus Gate (Evolution of Halo's Gate):**
     Dynamically resolves System Service Numbers (SSNs) at runtime. If an API is hooked by an EDR (starts with a `JMP`), Charon scans the neighboring functions in memory to calculate the correct SSN without touching the hooked bytes.
 
@@ -79,6 +82,7 @@ Deploy `CharonArtifact.exe` to the target machine. Upon execution, it will:
 
 This tool was forged using knowledge and techniques shared by the masters of the craft.
 
+* **[Helvio Junior](https://github.com/helviojunior/hookchain/tree/main): For the HookChain technique, enabling transparent IAT redirection to indirect syscalls, allowing support for complex payloads.
 * **[Maldev Academy](https://maldevacademy.com):** The core logic for **HellHall**, **Tartarus Gate**, and the foundational concepts of Indirect Syscalls and API Hashing are derived from their exceptional course materials and research.
 * **[trickster0](https://github.com/trickster0/TartarusGate):** For the original Tartarus Gate research.
 
