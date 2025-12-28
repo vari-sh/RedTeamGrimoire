@@ -129,14 +129,6 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Charon.c" />
-    <ClCompile Include="Tartarus.c" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Structs.h" />
-    <ClInclude Include="Tartarus.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <MASM Include="HellHall.asm" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

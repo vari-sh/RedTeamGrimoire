@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="Charon/Charon.vcxproj" />
+  <Project Path="Charon/Charon.vcxproj" Id="9842bf24-eb28-4e17-bf13-5bd0ba1cef8a" />
 </Solution>
