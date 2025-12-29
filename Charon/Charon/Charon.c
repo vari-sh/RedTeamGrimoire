@@ -20,7 +20,7 @@
  *      5. Payload Protection: Uses RC4 encryption and 'KeyGuard' (runtime key calculation)
  *         to prevent static analysis of the payload.
  * 
- *  Author: [Your Name/Handle]
+ *  Author: vari.sh
  * ======================================================================================
  */
 
