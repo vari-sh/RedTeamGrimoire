@@ -442,7 +442,7 @@ int main(int argc, char *argv[]) {
   char sHint[10]; sprintf(sHint, "0x%02X", hintByte);
 
   // 3. Write ASM File
-  printf("[*] Generazione syscalls.asm (HellHall + 1024 Stubs)...\n");
+  printf("[*] Generating syscalls.asm (HellHall + 1024 Stubs)...\n");
   FILE *fAsm = fopen("syscalls.asm", "w");
   if (fAsm) { 
       fputs(g_HellHallAsm, fAsm);
