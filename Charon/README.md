@@ -85,6 +85,7 @@ Deploy `CharonArtifact.exe` to the target machine. Upon execution, the artifact 
 
 This tool was forged using knowledge and techniques shared by the masters of the craft.
 
+* **[Helvio Junior](https://github.com/helviojunior/hookchain):** For the **HookChain** research. Although Charon has evolved to use Indirect Syscall instead of IAT redirection, the concept of automated assembly stub generation and syscall integration was heavily inspired by his work.
 * **[Maldev Academy](https://maldevacademy.com):** The core logic for **HellHall**, **Tartarus Gate**, and the foundational concepts of Indirect Syscalls and Stack Spoofing are derived from their exceptional course materials and research.
 * **[trickster0](https://github.com/trickster0/TartarusGate):** For the original Tartarus Gate research.
 
