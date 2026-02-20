@@ -7,12 +7,6 @@ Unlike the original version which embedded the payload as a static resource (oft
 * **Mechanism**: The payload is now stored in an external `.enc` file.
 * **Obfuscation**: The staged file is encoded as a series of UUID strings. This transforms high-entropy encrypted data into a low-entropy ASCII format, bypassing static "Encrypted/Packed Payload" detections.
 
-### 2. Thread Context Hijacking (Behavioral Evasion)
-The original "Phantasmal Execution" technique via Thread Pools (`TpAllocWork`) has been replaced.
-* **New Technique**: **Suspended Thread Hijacking**.
-* **Spoofed Entry Point**: Charon now creates a legitimate thread pointing to a benign function (e.g., `kernel32!Sleep`).
-* **Execution**: Using `GetThreadContext` and `SetThreadContext`, the thread's `RIP` register is redirected to the stomped module before being resumed. This hides the execution origin from stack-walking guardians.
-
 ## 🕯️ Updated Ritual (New Usage)
 
 The build process now requires an additional step to prepare the external payload.
