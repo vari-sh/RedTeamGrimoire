@@ -42,6 +42,11 @@ int main() {
     printf("[*] Executing NtAllocateVirtualMemory...\n");
     
     // Using (HANDLE)-1 for current process
+    // Available masks:
+    // Mask_Memory   -> MapViewOfFile
+    // Mask_File     -> CreateFileW
+    // Mask_Security -> VirtualProtectEx
+    // Mask_Worker   -> WaitForSingleObjectEx / BaseThreadInitThunk
     NTSTATUS status = ExecuteSyscall(pAlloc, Mask_Worker, (HANDLE)-1, &pMem, 0, &sSize, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
     if (status == 0) {
