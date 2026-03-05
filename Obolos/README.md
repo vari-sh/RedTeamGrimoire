@@ -1,7 +1,5 @@
 # 🪙 Obolos 🪙
-"No soul crosses the river Styx for free. The Ferryman demands his coin, 
-and the guardians of the underworld demand silence. Present the Obolos, 
-and the gates to the abyss shall open unnoticed."
+> "No soul crosses the river Styx for free. The Ferryman demands his coin, and the guardians of the underworld demand silence. Present the Obolos, and the gates to the abyss shall open unnoticed."
 
 Obolos is a pure, agnostic evasion engine designed for Red Team sorcery. 
 Stripped of any specific payload loaders or module stomping techniques, it serves 
@@ -9,19 +7,19 @@ as the raw, foundational dark magic required to execute System Calls directly
 into the Windows Kernel while remaining completely invisible to modern 
 Endpoint Detection and Response (EDR) guardians.
 
-🔮 Arcane Mechanics (Techniques Used)
+## 🔮 Arcane Mechanics (Techniques Used)
 Obolos is the core mechanism that powers tools like Charon. It provides a clean API to weave illusions and bypass user-land inspections:
 
-Tartarus Gate (Dynamic SSN Resolution):
+* **Tartarus Gate (Dynamic SSN Resolution):**
 Obolos dynamically maps the underworld at runtime. It resolves System Service Numbers (SSNs) via the PEB and export directories. If a guardian has placed a hook (a JMP instruction) on an API, Obolos inspects the neighboring memory addresses to calculate the true SSN, entirely bypassing user-land hooks.
 
-SilentMoonwalk (Synthetic Stack Weaving):
+* **SilentMoonwalk (Synthetic Stack Weaving):**
 Calling the kernel directly leaves a massive forensic anomaly. Obolos parses the Exception Directory (.pdata) of system modules to mathematically calculate the exact frame sizes of legitimate functions (like WaitForSingleObjectEx or VirtualProtectEx). It then weaves a perfect, mathematically sound synthetic call stack. When the guardians perform a "Stack Walk", they see only the illusion of a benign, legitimate thread.
 
-Polymorphic Glyphs (Dynamic ASM Stubs):
+* **Polymorphic Glyphs (Dynamic ASM Stubs):**
 Static signatures are the downfall of lazy mages. Obolos includes a Python-based invocation script that generates 512 unique Assembly stubs before compilation. It dynamically injects arcane junk code (NOPs, register exchanges) into the padding of each stub, ensuring the compiled artifact has a completely randomized block hash on every build.
 
-🕯️ The Ritual (Usage)
+## 🕯️ The Ritual (Usage)
 Obolos is meant to be integrated into your own dark projects. It handles the low-level architecture so you can focus on the payload logic.
 
 ### The Fast Path
