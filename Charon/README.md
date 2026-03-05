@@ -1,12 +1,12 @@
 # 🚣 Charon 🚣
 
-> *"The Ferryman waits. Pay the coin, and he shall guide your payload across the river Styx, past the watchful eyes of the guardians, into the realm of the living kernel."*
+> *"The Ferryman waits. Pay the coin, and he shall guide your soul across the river Styx, past the watchful eyes of the guardians, into the realm of the living kernel."*
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/381e2857-5b52-472b-aa5c-3987b19ef205" width="500"/>
 </p>
 
-**Charon** is a standalone, self-compiling artifact builder designed for Red Team operations. It creates a specialized vessel (executable) for your shellcode that utilizes advanced evasion techniques to bypass EDR hooks, memory scanners, and static analysis.
+**Charon** is a standalone, self-compiling artifact builder designed for Red Team operations. It creates a specialized vessel (executable) for your soul (shellcode) that utilizes advanced evasion techniques to bypass EDR hooks, memory scanners, and static analysis.
 
 ## 🔮 Arcane Mechanics (Techniques Used)
 
@@ -15,8 +15,11 @@ Charon weaves together several state-of-the-art techniques to ensure the payload
 * **Spectral Image (Module Stomping):**
     Charon avoids the suspicious usage of `VirtualAlloc` (which creates "Private" memory regions often flagged by scanners). Instead, it stealthily loads a legitimate, signed Microsoft DLL (`Chakra.dll`) using `LoadLibraryExA` with specific flags to suppress system notifications. The payload is then injected directly into the `.text` section of this module, making the malware appear as file-backed, legitimate code.
 
-* **SilentMoonwalk (Dynamic Stack Spoofing):**
-    To evade "Stack Walk" analysis by EDRs, Charon does not merely jump to a syscall. It parses the `.pdata` (Exception Directory) of legitimate system DLLs at runtime to calculate the exact stack frame size required by functions like `BaseThreadInitThunk`. It then constructs a synthetic call stack and copies stack arguments, ensuring the execution flow looks mathematically perfect and indistinguishable from normal Windows behavior.
+* **SilentMoonwalk (Adaptive Stack Spoofing):**
+    To evade "Stack Walk" analysis, Charon mathematically reconstructs the entire call chain. It parses the `.pdata` (Exception Directory) of system modules at runtime to calculate the exact frame sizes for `VirtualProtectEx`, `BaseThreadInitThunk`, and `RtlUserThreadStart`. It then constructs a perfect synthetic stack that hides the malicious origin of the thread.
+
+* **Lethe's Wipe (Forensic Stack Cleaning):**
+    Before handing over control to the payload, Charon performs an aggressive "Wipe" of the stack. By physically zeroing out the bytes used during the preparation phase, it eliminates "trailing bytes" that could reveal the loader's activity to behavioral scanners.
 
 * **Tartarus Gate (Dynamic SSN Resolution):**
     Dynamically resolves System Service Numbers (SSNs) at runtime. If an API is hooked by an EDR (starts with a `JMP`), Charon scans the neighboring functions in memory to calculate the correct SSN without touching the hooked bytes, bypassing user-land hooks entirely.
@@ -27,8 +30,18 @@ Charon weaves together several state-of-the-art techniques to ensure the payload
 * **KeyGuard (Runtime Key Brute-Force):**
     The RC4 decryption key is not stored in the binary. Instead, the artifact contains a mathematical relationship and a "Hint Byte". At runtime, the malware must brute-force a secret value (costing CPU cycles) to reconstruct the key. This delays execution and foils many sandbox environments and static analysis tools.
 
-* **Phantasmal Execution (Thread Pools):**
-    Instead of creating a new thread (which is a high-noise event), Charon leverages the Windows Thread Pool API (`TpAllocWork`, `TpPostWork`). The payload execution is queued as a legitimate work item, blending in with standard system background activity.
+* **Abyssal Leap (Tail Call Execution):**
+    Instead of high-noise events like creating new threads or using suspicious callbacks, Charon utilizes a direct `JMP` (Tail Call). By wiping the stack and registers before the jump, the payload appears as the natural and legitimate occupant of the current thread.
+
+---
+
+## 📂 Project Variants
+
+This repository contains two versions of Charon, depending on your staging requirements:
+
+1.  **Monolithic Version (Current Folder):** The "classic" version where the encrypted payload is embedded within the executable's resources.
+2.  **External Payload Version:** A specialized variant that loads the payload from an external UUID-encoded file to minimize the main artifact's entropy and bypass advanced static analysis. 
+    * **See details here:** [`/Charon-PayloadFileVersion`](./Charon-PayloadFileVersion)
 
 ---
 
@@ -72,12 +85,12 @@ Charon will read the shellcode, encrypt it, calculate the KeyGuard variables, ge
 
 Deploy `CharonArtifact.exe` to the target machine. Upon execution, the artifact follows this stealth flow:
 
-1.  **Initialization:** Resolves `LoadLibraryExA` and syscalls dynamically (no suspicious imports).
-2.  **Stomping:** Loads `Chakra.dll` without triggering `DLL_PROCESS_ATTACH`.
-3.  **Preparation:** Changes the legitimate DLL's memory protection to RW (via Indirect Syscall).
-4.  **Awakening:** Brute-forces its own encryption key and decrypts the payload into the DLL.
-5.  **Armoring:** Flips memory protection to RX (Execute-Read).
-6.  **Execution:** Queues the hijacked DLL entry point to the Windows Thread Pool.
+1.  **Initialization:** Dynamic resolution of `ntdll` and adaptive stack frame calculation.
+2.  **Stomping:** Silent loading of `Chakra.dll`.
+3.  **Preparation:** Memory protection change to RW via Indirect Syscall with Stack Spoofing.
+4.  **Awakening:** KeyGuard brute-force and payload decryption (from resource or external file).
+5.  **Armoring:** Memory protection restore to RX (Execute-Read).
+6.  **Purification & Leap:** Total stack wipe and final `JMP` into the payload.
 
 ---
 
