@@ -1,4 +1,4 @@
-🪙 Obolos 🪙
+# 🪙 Obolos 🪙
 "No soul crosses the river Styx for free. The Ferryman demands his coin, 
 and the guardians of the underworld demand silence. Present the Obolos, 
 and the gates to the abyss shall open unnoticed."
