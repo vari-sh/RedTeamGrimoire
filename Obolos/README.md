@@ -7,6 +7,10 @@ as the raw, foundational dark magic required to execute System Calls directly
 into the Windows Kernel while remaining completely invisible to modern 
 Endpoint Detection and Response (EDR) guardians.
 
+<p align="center">
+  <img src="../Images/Obolos.png" width="500"/>
+</p>
+
 ## 🔮 Arcane Mechanics (Techniques Used)
 Obolos is the core mechanism that powers tools like Charon. It provides a clean API to weave illusions and bypass user-land inspections:
 
