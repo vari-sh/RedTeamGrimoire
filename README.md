@@ -4,8 +4,7 @@ A forbidden collection of Red Team sorcery
 Step into the Red Team Grimoire, a tome of digital witchcraft where dark magic meets cybersecurity. Here, you’ll find arcane spells and forbidden rituals designed to manipulate the fabric of enterprise defenses. Each incantation has been meticulously crafted and tested in the shadows of real-world assessments.
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/dba02250-9ebd-4d53-b7df-536dd5c1d238" width="500"/>
-  
+  <img src="Images/RedTeamGrimoire.png" width="500"/>
 </p>
 
 ## 🔮 Contents of the Grimoire 🔮
