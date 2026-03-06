@@ -5,7 +5,6 @@
 #include <TlHelp32.h>
 #include <Windows.h>
 
-
 // ==========================
 // Macro
 // ==========================
@@ -40,6 +39,11 @@ typedef struct _OBJECT_ATTRIBUTES {
   PVOID SecurityDescriptor;
   PVOID SecurityQualityOfService;
 } OBJECT_ATTRIBUTES, *POBJECT_ATTRIBUTES;
+
+typedef struct _CLIENT_ID {
+  HANDLE UniqueProcess;
+  HANDLE UniqueThread;
+} CLIENT_ID, *PCLIENT_ID;
 
 // ==========================
 // API Function Pointer Types
