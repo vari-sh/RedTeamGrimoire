@@ -39,7 +39,7 @@ This repository contains three versions of Doppekganger:
 
 ---
 
-## 📜 The Ritual
+## 🕯️ The Ritual
 ### 🎭 Doppelganger
 
 🛡️ Disables PPL using the cursed RTCore64.sys driver (BYOVD)
@@ -56,6 +56,7 @@ This repository contains three versions of Doppekganger:
 #### 💀 HollowReaper.c
 The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
 🔧 Instructions for generating the shellcode to embed are provided in the HollowReaper project.
+🚣 It is also possible to run it with Charon.
 
 #### 🔐 decrypt_xor_dump.py
 A local decryption utility. Use this to restore the original dump from its XOR-obfuscated form.
@@ -70,8 +71,9 @@ Extracts raw Kerberos tickets from the minidump.
 | HollowReaper.c |	Hollow a process and inject shellcode |
 | decrypt_xor_dump.py | Python tool to decrypt XOR dump |
 | RTCore64.sys | Vulnerable driver used for PPL bypass (BYOVD) |
+| raw_TGT_extractor_win11.py | Look for Kerberos tickets inside the dump |
 
-## 🕯️ Usage Flow
+## 📜 Usage Flow
 ### Standalone
 In order to use Doppelganger you must place RTCore64.sys in C:\Users\Public. Doppleganger can be used standalone or hollowed through HollowReaper.
 ```
