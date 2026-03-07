@@ -73,9 +73,8 @@ Extracts raw Kerberos tickets from the minidump.
 1. Place RTCore64.sys in C:\Users\Public.
 2. Execute `.\Doppelganger.exe`
 3. Use decrypt_xor_dump.py to decrypt the dumped file offline
-   ```
-   python .\decrypt_xor_dump.py .\doppelganger.dmp
-   ```
+   `python .\decrypt_xor_dump.py .\doppelganger.dmp`
+4. Use pypykatz to read the dump on your machine
 
 --------------------------------------------------------------------------------
 
