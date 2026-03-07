@@ -69,7 +69,7 @@ Extracts raw Kerberos tickets from the minidump.
 ## ⚗️ The Components
 | File | Purpose |
 |------|---------|
-| Doppelganger | The shellcode: disable PPL, clone LSASS, dump and XOR |
+| Doppelganger | Disable PPL, clone LSASS, dump and XOR |
 | HollowReaper.c |	Hollow a process and inject shellcode |
 | decrypt_xor_dump.py | Python tool to decrypt XOR dump |
 | RTCore64.sys | Vulnerable driver used for PPL bypass (BYOVD) |
