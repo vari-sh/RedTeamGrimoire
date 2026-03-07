@@ -8,6 +8,20 @@
 
 **Charon** is a standalone, self-compiling artifact builder designed for Red Team operations. It creates a specialized vessel (executable) for your soul (shellcode) that utilizes advanced evasion techniques to bypass EDR hooks, memory scanners, and static analysis.
 
+---
+
+## 📂 Project Variants
+
+TL;DR: for best evasion, use External Payload Version
+
+This repository contains two versions of Charon, depending on your staging requirements:
+
+1.  **Monolithic Version (Legacy):** The "classic" version where the encrypted payload is embedded within the executable's resources.
+2.  **External Payload Version:** A specialized variant that loads the payload from an external UUID-encoded file to minimize the main artifact's entropy and bypass advanced static analysis. 
+    * **See details here:** [`/Charon-PayloadFileVersion`](./Charon_ExternalPayloadVersion)
+
+---
+
 ## 🔮 Arcane Mechanics (Techniques Used)
 
 Charon weaves together several state-of-the-art techniques to ensure the payload's safe passage:
@@ -33,19 +47,48 @@ Charon weaves together several state-of-the-art techniques to ensure the payload
 * **Abyssal Leap (Tail Call Execution):**
     Instead of high-noise events like creating new threads or using suspicious callbacks, Charon utilizes a direct `JMP` (Tail Call). By wiping the stack and registers before the jump, the payload appears as the natural and legitimate occupant of the current thread.
 
+
+## 🕯️ Updated Ritual (New Usage)
+
+The build process now requires an additional step to prepare the external payload.
+
+### Prerequisites
+
+* Windows Environment
+* Visual Studio (with C++ Desktop Development) installed.
+* **Developer Command Prompt for VS** (Must be used to access `cl` and `ml64`).
+
+### Step 1. Forge the Soul (Generate Shellcode)
+
+Generate your raw shellcode using `msfvenom` or your C2 framework of choice or Donut. The format **must** be raw.
+
+**Example: Generating a Calc payload**
+
+```bash
+msfvenom -p windows/x64/exec CMD=calc.exe -f raw -o payload.bin
+```
+
+Use the new Python utility to generate your obfuscated staging file:
+```bash
+python UUIDEncrypter.py payload.bin payload.enc
+```
+
+### Step 2: Build the Artifact
+Compile the updated Charon builder and generate the vessel:
+```bash
+cl Charon.c
+.\Charon.exe
+```
+
+### Step 3: Execution
+On the target machine, the artifact now requires the path to the external soul (payload) as a command-line argument:
+```bash
+.\CharonArtifact.exe payload.enc
+```
+
 ---
 
-## 📂 Project Variants
-
-This repository contains two versions of Charon, depending on your staging requirements:
-
-1.  **Monolithic Version (Current Folder):** The "classic" version where the encrypted payload is embedded within the executable's resources.
-2.  **External Payload Version:** A specialized variant that loads the payload from an external UUID-encoded file to minimize the main artifact's entropy and bypass advanced static analysis. 
-    * **See details here:** [`/Charon-PayloadFileVersion`](./Charon-PayloadFileVersion)
-
----
-
-## 🕯️ The Ritual (Usage)
+## 🕯️ The Ritual (Legacy)
 
 ### Prerequisites
 

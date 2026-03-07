@@ -15,7 +15,7 @@ Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled 
   <img src="../Images/Doppelganger.png" width="500"/>
 </p>
 
-## Blogpost
+## Blogpost (for the first Legacy version)
 - https://vari-sh.github.io/posts/doppelganger/
 - https://labs.yarix.com/2025/06/doppelganger-an-advanced-lsass-dumper-with-process-cloning/
 
@@ -24,6 +24,20 @@ Unlike traditional tools, Doppelganger works on modern Windows with PPL enabled 
 
 ## Support
 - [BuyMeACoffee](https://buymeacoffee.com/vari.sh)
+
+---
+
+## 📂 Project Variants
+
+TL;DR: for best evasion, use DoppelgangerXObolos version
+
+This repository contains three versions of Doppekganger:
+
+1.  **Doppelganger (Legacy):** The "classic" version.
+2.  **Doppelganger_noCRT:** A variant of the classic version that does not rely on CRT.
+3.  **DoppelgangerXObolos:** The version that now includes Obolos engine and has other various improvements 
+
+---
 
 ## 📜 The Ritual
 ### 🎭 Doppelganger
