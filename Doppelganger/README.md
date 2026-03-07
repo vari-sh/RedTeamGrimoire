@@ -55,7 +55,9 @@ This repository contains three versions of Doppekganger:
 ### 🧿 Utilities
 #### 💀 HollowReaper.c
 The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
+
 🔧 Instructions for generating the shellcode to embed are provided in the HollowReaper project.
+
 🚣 It is also possible to run it with Charon.
 
 #### 🔐 decrypt_xor_dump.py
