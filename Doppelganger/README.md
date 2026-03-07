@@ -53,12 +53,6 @@ This repository contains three versions of Doppekganger:
 📜 Writes logs in C:\Users\Public\log.txt
 
 ### 🧿 Utilities
-#### 💀 HollowReaper.c
-The vessel for your payload. This performs process hollowing, carving out a legitimate process and injecting your shellcode into its husk.
-
-🔧 Instructions for generating the shellcode to embed are provided in the HollowReaper project.
-
-🚣 It is also possible to run it with Charon.
 
 #### 🔐 decrypt_xor_dump.py
 A local decryption utility. Use this to restore the original dump from its XOR-obfuscated form.
@@ -70,38 +64,20 @@ Extracts raw Kerberos tickets from the minidump.
 | File | Purpose |
 |------|---------|
 | Doppelganger | Disable PPL, clone LSASS, dump and XOR |
-| HollowReaper.c |	Hollow a process and inject shellcode |
 | decrypt_xor_dump.py | Python tool to decrypt XOR dump |
 | RTCore64.sys | Vulnerable driver used for PPL bypass (BYOVD) |
 | raw_TGT_extractor_win11.py | Look for Kerberos tickets inside the dump |
 
 ## 📜 Usage Flow
-### Standalone
-In order to use Doppelganger you must place RTCore64.sys in C:\Users\Public. Doppleganger can be used standalone or hollowed through HollowReaper.
-```
-.\Doppelganger.exe
-```
+
+1. Place RTCore64.sys in C:\Users\Public.
+2. Execute `.\Doppelganger.exe`
+3. Use decrypt_xor_dump.py to decrypt the dumped file offline
+   ```
+   python .\decrypt_xor_dump.py .\doppelganger.dmp
+   ```
+
 --------------------------------------------------------------------------------
-### Process Hollowed
-
-1️⃣ Compile Doppelganger
-
-2️⃣ Use Donut to convert it into shellcode
-```
-.\donut.exe -a 2 -f 7 -i Doppelganger.exe
-```
-3️⃣ XOR the shellcode and embed it into HollowReaper.c (look for util files in [HollowReaper](https://github.com/vari-sh/RedTeamGrimoire/tree/main/HollowReaper))
-
-4️⃣ Run HollowReaper to hollow a process and trigger Doppelganger (all files saved to C:\Users\Public)
-```
-.\HollowReaper.exe "C:\windows\explorer.exe"
-```
-5️⃣ Use decrypt_xor_dump.py to decrypt the dumped file offline
-```
-python .\decrypt_xor_dump.py .\doppelganger.dmp
-```
-
----------------------------------------------------------------------------------
 
 ## 🧙‍♂️ Counterspell - YARA Rules
 
