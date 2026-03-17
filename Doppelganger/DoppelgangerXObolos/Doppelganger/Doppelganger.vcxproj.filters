@@ -31,8 +31,12 @@
     <ClCompile Include="src\utils.c">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\engine.c" />
-    <ClCompile Include="src\nocrt.c" />
+    <ClCompile Include="src\engine.c">
+      <Filter>src</Filter>
+    </ClCompile>
+    <ClCompile Include="src\nocrt.c">
+      <Filter>src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\api.h">
@@ -68,8 +72,12 @@
     <ClInclude Include="include\utils.h">
       <Filter>include</Filter>
     </ClInclude>
-    <ClInclude Include="include\engine.h" />
-    <ClInclude Include="include\nocrt.h" />
+    <ClInclude Include="include\engine.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\nocrt.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="src">
@@ -80,6 +88,8 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <MASM Include="src\syscalls.asm" />
+    <MASM Include="src\syscalls.asm">
+      <Filter>src</Filter>
+    </MASM>
   </ItemGroup>
 </Project>
