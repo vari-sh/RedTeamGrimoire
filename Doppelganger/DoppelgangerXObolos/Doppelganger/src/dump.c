@@ -6,6 +6,7 @@
 #include "memory.h"
 #include "offsets.h"
 #include "utils.h"
+#include "nocrt.h"
 #include <windows.h>
 
 extern SYSCALL_LIST SyscallList;
