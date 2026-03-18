@@ -1112,7 +1112,7 @@ int main() {
   // -----------------------------------------------------------------------
   printf("[*] Compiling Artifact (CL)...\n");
   int res =
-      system("cl /nologo /O2 artifact.c syscalls.obj "
+      system("cl /nologo /Od artifact.c syscalls.obj "
              // "sqlite-amalgamation-3510200\\sqlite3.c "
              "/Fe:CharonArtifact.exe /link /CETCOMPAT:NO /SUBSYSTEM:WINDOWS");
 
