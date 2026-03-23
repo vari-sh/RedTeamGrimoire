@@ -366,7 +366,7 @@ BOOL DumpAndXorLsass(const char *outPath, const char *key, size_t key_len) {
 // ==================================
 
 BOOL SetFileGenericReadAccess(const char *filePath) {
-  EXPLICIT_ACCESS ea = {0};
+  EXPLICIT_ACCESS_A ea = {0};
   PACL pNewDACL = NULL;
 
   ea.grfAccessPermissions = GENERIC_READ;
@@ -374,9 +374,9 @@ BOOL SetFileGenericReadAccess(const char *filePath) {
   ea.grfInheritance = NO_INHERITANCE;
   ea.Trustee.TrusteeForm = TRUSTEE_IS_NAME;
   ea.Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
-  ea.Trustee.ptstrName = L"Everyone";
+  ea.Trustee.ptstrName = (LPSTR)"Everyone";
 
-  DWORD dwRes = SetEntriesInAcl(1, &ea, NULL, &pNewDACL);
+  DWORD dwRes = SetEntriesInAclA(1, &ea, NULL, &pNewDACL);
   if (dwRes != ERROR_SUCCESS)
     return FALSE;
 
